@@ -1,0 +1,11 @@
+# OS
+Thumbs.db
+.DS_Store
+
+# Editör
+.vscode/
+.idea/
+*.swp
+
+# Local geçici
+*.log

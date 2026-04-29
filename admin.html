@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#2C2A26" />
+  <title>Olea — Personel Paneli</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: '#FBF7F0',
+            'cream-deep': '#F5EFE3',
+            charcoal: '#2C2A26',
+            'charcoal-soft': '#3D3A34',
+            muted: '#7A746B',
+            'muted-soft': '#A89F92',
+            gold: '#B8956A',
+            'gold-soft': '#D4B896',
+            olive: '#5A6B45',
+            'olive-soft': '#7B8E60',
+            warning: '#C28533',
+            'border-soft': '#E8E0D0',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Cormorant Garamond', 'Georgia', 'serif'],
+          },
+          borderColor: { DEFAULT: '#E8E0D0' },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="bg-cream text-charcoal font-sans antialiased min-h-screen">
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <script type="text/babel" data-type="module" data-presets="react">
+    import React, { useState, useEffect, useMemo, useRef, useCallback } from 'https://esm.sh/react@18.3.1';
+    import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
+    import * as store from './store.js';
+
+    const fmt = (n) => `€${n.toFixed(2).replace('.', ',')}`;
+
+    function timeAgo(ms) {
+      const diff = Date.now() - ms;
+      const s = Math.floor(diff / 1000);
+      if (s < 60) return `${s} sn önce`;
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m} dk önce`;
+      const h = Math.floor(m / 60);
+      return `${h} sa önce`;
+    }
+
+    function timeStr(ms) {
+      const d = new Date(ms);
+      return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    }
+
+    // ── Web Audio API ile bip sesi ─────────────────────────────
+    function playBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = ctx.currentTime;
+
+        // 2 notalı zarif ding
+        [
+          { freq: 880, t: 0,    dur: 0.18, vol: 0.18 },
+          { freq: 1320, t: 0.10, dur: 0.32, vol: 0.14 },
+        ].forEach(({ freq, t, dur, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0, now + t);
+          gain.gain.linearRampToValueAtTime(vol, now + t + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + t + dur);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(now + t);
+          osc.stop(now + t + dur + 0.05);
+        });
+
+        setTimeout(() => ctx.close(), 800);
+      } catch (e) {
+        console.warn('Beep failed', e);
+      }
+    }
+
+    function tryNotify(title, body) {
+      try {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') {
+          new Notification(title, { body, icon: '/favicon.ico', tag: 'olea-order' });
+        }
+      } catch {}
+    }
+
+    // ── HEADER ─────────────────────────────────────────────────
+    function AdminHeader({ count, soundOn, onToggleSound, onClearAll }) {
+      return (
+        <header className="sticky top-0 z-30 bg-charcoal text-cream">
+          <div className="px-6 py-4 flex items-center justify-between max-w-7xl mx-auto">
+            <div className="flex items-baseline gap-3">
+              <span className="font-display text-3xl italic">Olea</span>
+              <span className="text-[10px] tracking-[0.3em] uppercase text-gold-soft">Personel Paneli</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-charcoal-soft border border-charcoal-soft">
+                <span className={`w-1.5 h-1.5 rounded-full ${count > 0 ? 'bg-olive-soft animate-pulse' : 'bg-muted'}`}></span>
+                <span className="text-[12px] tracking-wide font-medium">Aktif: {count}</span>
+              </div>
+              <button
+                onClick={onToggleSound}
+                title={soundOn ? 'Sesi kapat' : 'Sesi aç'}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${soundOn ? 'bg-gold text-charcoal' : 'bg-charcoal-soft text-muted'}`}
+              >
+                {soundOn ? '🔔' : '🔕'}
+              </button>
+              <button
+                onClick={onClearAll}
+                title="Tüm siparişleri temizle (demo için)"
+                className="text-[11px] uppercase tracking-wide text-muted hover:text-cream px-3 py-1.5 rounded border border-charcoal-soft"
+              >
+                Sıfırla
+              </button>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // ── ORDER CARD ─────────────────────────────────────────────
+    const NEXT_STATUS = {
+      new: { next: 'preparing', label: 'Hazırlamaya Başla', color: 'warning' },
+      preparing: { next: 'ready', label: 'Hazır', color: 'olive' },
+      ready: { next: 'served', label: 'Servis Edildi', color: 'charcoal' },
+    };
+
+    const STATUS_BADGE = {
+      new:        { label: 'Yeni',         dotClass: 'status-dot--new',        bg: 'bg-gold-soft/20',  text: 'text-gold' },
+      preparing:  { label: 'Hazırlanıyor', dotClass: 'status-dot--preparing',  bg: 'bg-warning/15',    text: 'text-warning' },
+      ready:      { label: 'Hazır',        dotClass: 'status-dot--ready',      bg: 'bg-olive/15',      text: 'text-olive' },
+    };
+
+    function OrderCard({ order, isNew, onAdvance, onCancel }) {
+      const [now, setNow] = useState(Date.now());
+      useEffect(() => {
+        const t = setInterval(() => setNow(Date.now()), 30000);
+        return () => clearInterval(t);
+      }, []);
+
+      const next = NEXT_STATUS[order.status];
+      const badge = STATUS_BADGE[order.status];
+
+      return (
+        <article className={`bg-white border rounded-2xl overflow-hidden flex flex-col ${isNew ? 'order-flash order-card-new' : ''}`} style={{ borderColor: '#E8E0D0' }}>
+          {/* Top: table + time + status */}
+          <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-border-soft">
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="font-display text-2xl italic text-charcoal">Masa {order.table}</span>
+                <span className={`text-[10px] tracking-wide uppercase px-2 py-0.5 rounded-full ${badge.bg} ${badge.text} font-semibold`}>
+                  <span className={`status-dot ${badge.dotClass}`}></span>
+                  {badge.label}
+                </span>
+              </div>
+              <div className="text-[11px] text-muted mt-0.5">
+                {timeStr(order.createdAt)} · {timeAgo(order.createdAt)}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="font-display text-2xl text-gold">{fmt(order.total)}</div>
+              <div className="text-[10px] tracking-wide uppercase text-muted-soft">{order.items.reduce((s, i) => s + i.qty, 0)} ürün</div>
+            </div>
+          </div>
+
+          {/* Items */}
+          <div className="px-5 py-3 flex-1">
+            <ul className="space-y-1.5">
+              {order.items.map(it => (
+                <li key={it.id} className="flex justify-between gap-3 text-[13px]">
+                  <span className="text-charcoal">
+                    <span className="inline-block min-w-[24px] text-gold font-semibold">{it.qty}×</span>
+                    {it.name}
+                  </span>
+                  <span className="text-muted text-[12px]">{fmt(it.price * it.qty)}</span>
+                </li>
+              ))}
+            </ul>
+
+            {order.notes && (
+              <div className="mt-3 p-2.5 bg-cream-deep border-l-2 border-gold rounded text-[12px] italic text-charcoal-soft">
+                <span className="text-[10px] tracking-wide uppercase text-gold not-italic mr-1">Not:</span>
+                {order.notes}
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="px-5 pb-4 pt-2 flex items-center gap-2">
+            <button
+              onClick={() => onAdvance(order.id, next.next)}
+              className={`flex-1 py-3 rounded-xl font-medium text-[13px] tracking-wide transition-colors ${
+                next.color === 'warning' ? 'bg-warning text-white hover:opacity-90' :
+                next.color === 'olive'   ? 'bg-olive text-white hover:opacity-90' :
+                'bg-charcoal text-cream hover:bg-gold'
+              }`}
+            >
+              {next.label} →
+            </button>
+            <button
+              onClick={() => { if (confirm('Bu siparişi iptal et?')) onCancel(order.id); }}
+              className="px-3 py-3 text-[12px] text-muted hover:text-charcoal border border-border-soft rounded-xl"
+              title="Siparişi iptal et"
+            >
+              ✕
+            </button>
+          </div>
+        </article>
+      );
+    }
+
+    // ── ARCHIVE (servis edilen) ────────────────────────────────
+    function Archive({ orders }) {
+      const [open, setOpen] = useState(false);
+
+      // Bugün servis edilenleri filtrele
+      const today = useMemo(() => {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        return orders.filter(o => o.updatedAt >= start.getTime());
+      }, [orders]);
+
+      if (today.length === 0) return null;
+
+      return (
+        <section className="mt-8 max-w-7xl mx-auto px-6">
+          <button
+            onClick={() => setOpen(o => !o)}
+            className="flex items-center gap-2 text-[12px] tracking-wide uppercase text-muted hover:text-charcoal"
+          >
+            <span>{open ? '▾' : '▸'}</span>
+            Bugün Servis Edilen ({today.length})
+          </button>
+          {open && (
+            <div className="mt-4 grid gap-2">
+              {today.slice(0, 12).map(o => (
+                <div key={o.id} className="bg-cream-deep/60 border border-border-soft rounded-xl px-4 py-3 flex justify-between items-center text-[13px]">
+                  <div className="flex items-baseline gap-3">
+                    <span className="font-display text-lg italic text-charcoal">Masa {o.table}</span>
+                    <span className="text-muted">{o.items.reduce((s, i) => s + i.qty, 0)} ürün</span>
+                    <span className="text-[11px] text-muted-soft">{timeStr(o.updatedAt)}</span>
+                  </div>
+                  <span className="font-display text-lg text-gold">{fmt(o.total)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    // ── EMPTY STATE ────────────────────────────────────────────
+    function EmptyState() {
+      return (
+        <div className="text-center py-20 px-6">
+          <div className="font-display text-6xl italic text-gold-soft/40 mb-4">∅</div>
+          <h2 className="font-display text-3xl italic text-charcoal mb-2">Bekleniyor</h2>
+          <p className="text-muted text-[14px] max-w-sm mx-auto">
+            Henüz aktif sipariş yok. Müşteri menüden bir şey sipariş verdiğinde burada anında görünecek.
+          </p>
+          <div className="mt-8 inline-flex items-center gap-2 text-[11px] tracking-[0.2em] uppercase text-muted-soft">
+            <span className="w-2 h-2 rounded-full bg-olive animate-pulse"></span>
+            Canlı dinleniyor
+          </div>
+        </div>
+      );
+    }
+
+    // ── ROOT ───────────────────────────────────────────────────
+    function App() {
+      const [orders, setOrders] = useState(() => store.getActiveOrders());
+      const [archive, setArchive] = useState(() => store.getArchivedOrders());
+      const [soundOn, setSoundOn] = useState(true);
+      const [newOrderIds, setNewOrderIds] = useState(new Set()); // animasyon için
+      const audioUnlockedRef = useRef(false);
+
+      const refresh = useCallback(() => {
+        setOrders(store.getActiveOrders());
+        setArchive(store.getArchivedOrders());
+      }, []);
+
+      // Audio unlock (browser policy: user etkileşimi olmadan ses çalınmaz)
+      useEffect(() => {
+        const unlock = () => {
+          if (audioUnlockedRef.current) return;
+          try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            ctx.resume();
+            audioUnlockedRef.current = true;
+            ctx.close();
+          } catch {}
+        };
+        window.addEventListener('click', unlock, { once: true });
+        window.addEventListener('keydown', unlock, { once: true });
+        return () => {
+          window.removeEventListener('click', unlock);
+          window.removeEventListener('keydown', unlock);
+        };
+      }, []);
+
+      // Notification permission iste
+      useEffect(() => {
+        if ('Notification' in window && Notification.permission === 'default') {
+          // İlk tıklamadan sonra iste
+          const ask = () => {
+            Notification.requestPermission().catch(() => {});
+            window.removeEventListener('click', ask);
+          };
+          window.addEventListener('click', ask, { once: true });
+        }
+      }, []);
+
+      // Subscribe to store changes
+      useEffect(() => {
+        const unsub = store.subscribe((msg) => {
+          if (msg.type === 'order:new') {
+            refresh();
+            // animasyon için işaretle
+            setNewOrderIds(prev => {
+              const next = new Set(prev);
+              next.add(msg.order.id);
+              return next;
+            });
+            setTimeout(() => {
+              setNewOrderIds(prev => {
+                const next = new Set(prev);
+                next.delete(msg.order.id);
+                return next;
+              });
+            }, 1500);
+
+            if (soundOn) playBeep();
+            tryNotify('Yeni Sipariş', `Masa ${msg.order.table} · ${fmt(msg.order.total)}`);
+          } else if (msg.type === 'order:update' || msg.type === 'order:served' || msg.type === 'order:delete' || msg.type === 'reset' || msg.type === 'storage:change') {
+            refresh();
+          }
+        });
+        return unsub;
+      }, [soundOn, refresh]);
+
+      const handleAdvance = (id, status) => {
+        store.updateOrderStatus(id, status);
+        refresh();
+      };
+
+      const handleCancel = (id) => {
+        store.deleteOrder(id);
+        refresh();
+      };
+
+      const handleClear = () => {
+        if (confirm('Tüm aktif ve geçmiş siparişler silinsin mi? (Demo amaçlı)')) {
+          store.clearAll();
+          refresh();
+        }
+      };
+
+      // Sıralama: yeni siparişler üstte, ama içinde durum sırası gözetilsin
+      // (yeni → preparing → ready, en yeni en üstte)
+      const sorted = useMemo(() => {
+        const order = { new: 0, preparing: 1, ready: 2 };
+        return [...orders].sort((a, b) => {
+          const so = order[a.status] - order[b.status];
+          if (so !== 0) return so;
+          return b.createdAt - a.createdAt;
+        });
+      }, [orders]);
+
+      return (
+        <>
+          <AdminHeader
+            count={orders.length}
+            soundOn={soundOn}
+            onToggleSound={() => setSoundOn(s => !s)}
+            onClearAll={handleClear}
+          />
+
+          <main className="max-w-7xl mx-auto px-6 py-6">
+            {sorted.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                {sorted.map(o => (
+                  <OrderCard
+                    key={o.id}
+                    order={o}
+                    isNew={newOrderIds.has(o.id)}
+                    onAdvance={handleAdvance}
+                    onCancel={handleCancel}
+                  />
+                ))}
+              </div>
+            )}
+          </main>
+
+          <Archive orders={archive} />
+
+          <footer className="text-center py-8 text-[10px] tracking-[0.25em] uppercase text-muted-soft">
+            Olea · Personel Paneli · {sorted.length === 0 ? 'sessiz' : `${sorted.length} aktif`}
+          </footer>
+        </>
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
