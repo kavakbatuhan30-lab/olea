@@ -44,11 +44,71 @@
   <script type="text/babel" data-type="module" data-presets="react">
     import React, { useState, useEffect, useMemo, useRef, useCallback } from 'https://esm.sh/react@18.3.1';
     import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
-    import { MENU, CATEGORIES } from './menu.js';
+    import { MENU, CATEGORIES, LANGS, t } from './menu.js';
     import * as store from './store.js';
+
+    // ── i18n: UI metinleri ──────────────────────────────────────
+    const UI = {
+      menuTag:       { tr: 'Menü',      en: 'Menu',     fr: 'Menu',    nl: 'Menu' },
+      brandTag:      { tr: 'Brunch & Coffee', en: 'Brunch & Coffee', fr: 'Brunch & Café', nl: 'Brunch & Koffie' },
+      welcome:       { tr: 'Hoşgeldiniz', en: 'Welcome', fr: 'Bienvenue', nl: 'Welkom' },
+      table:         { tr: 'Masa',      en: 'Table',    fr: 'Table',   nl: 'Tafel' },
+      enterTable:    { tr: 'Masa Numaranızı Girin', en: 'Enter Your Table Number', fr: 'Entrez Votre Numéro de Table', nl: 'Voer Uw Tafelnummer In' },
+      tablePh:       { tr: 'örn. 5',    en: 'e.g. 5',   fr: 'ex. 5',   nl: 'bv. 5' },
+      openMenu:      { tr: 'Menüyü Aç', en: 'Open Menu', fr: 'Ouvrir le Menu', nl: 'Menu Openen' },
+      tableHelp:     { tr: 'Normalde QR kod ile otomatik gelir. Bu ekranı görüyorsan, masa numarasını manuel gir.',
+                       en: 'Normally arrives automatically via QR code. If you see this screen, enter your table number manually.',
+                       fr: 'Arrive normalement automatiquement via le QR code. Si vous voyez cet écran, entrez le numéro manuellement.',
+                       nl: 'Komt normaal automatisch via QR-code. Als u dit scherm ziet, voer het tafelnummer handmatig in.' },
+      addToCart:     { tr: 'Sepete ekle', en: 'Add to cart', fr: 'Ajouter', nl: 'Toevoegen' },
+      decrease:      { tr: 'Bir azalt',  en: 'Decrease', fr: 'Diminuer', nl: 'Verminderen' },
+      increase:      { tr: 'Bir ekle',   en: 'Increase', fr: 'Augmenter', nl: 'Verhogen' },
+      itemsLower:    { tr: 'ürün',       en: 'items',    fr: 'articles', nl: 'items' },
+      viewCart:      { tr: 'Sepetimi Görüntüle', en: 'View My Cart', fr: 'Voir Mon Panier', nl: 'Bekijk Mijn Winkelmandje' },
+      yourCart:      { tr: 'Sepetin',    en: 'Your Cart', fr: 'Votre Panier', nl: 'Uw Winkelmandje' },
+      cartEmpty:     { tr: 'Sepetin boş.', en: 'Your cart is empty.', fr: 'Votre panier est vide.', nl: 'Uw winkelmandje is leeg.' },
+      orderNote:     { tr: 'Sipariş Notu (opsiyonel)', en: 'Order Note (optional)', fr: 'Note de Commande (optionnel)', nl: 'Bestelnotitie (optioneel)' },
+      notePh:        { tr: 'örn. az pişmiş yumurta, sütsüz latte…',
+                       en: 'e.g. soft eggs, latte without milk…',
+                       fr: 'ex. œufs mollets, latte sans lait…',
+                       nl: 'bv. zachte eieren, latte zonder melk…' },
+      total:         { tr: 'Toplam',     en: 'Total',    fr: 'Total',   nl: 'Totaal' },
+      placeOrder:    { tr: 'Siparişi Gönder', en: 'Place Order', fr: 'Passer la Commande', nl: 'Bestelling Plaatsen' },
+      payAtTable:    { tr: 'Ödeme masada alınır', en: 'Payment at the table', fr: 'Paiement à la table', nl: 'Betaling aan tafel' },
+      close:         { tr: 'Kapat',      en: 'Close',    fr: 'Fermer',  nl: 'Sluiten' },
+      orderSummary:  { tr: 'Sipariş Özeti', en: 'Order Summary', fr: 'Résumé de Commande', nl: 'Besteloverzicht' },
+      newOrder:      { tr: 'Tekrar sipariş ver', en: 'Place a new order', fr: 'Nouvelle commande', nl: 'Nieuwe bestelling' },
+      approxTime:    { tr: '~15 dakika', en: '~15 minutes', fr: '~15 minutes', nl: '~15 minuten' },
+      addedToCart:   { tr: 'sepete eklendi', en: 'added to cart', fr: 'ajouté au panier', nl: 'toegevoegd' },
+      orderNotFound: { tr: 'Sipariş bulunamadı.', en: 'Order not found.', fr: 'Commande introuvable.', nl: 'Bestelling niet gevonden.' },
+      status: {
+        new:       { tr: 'Sipariş Alındı', en: 'Order Received', fr: 'Commande Reçue', nl: 'Bestelling Ontvangen' },
+        preparing: { tr: 'Hazırlanıyor',   en: 'Preparing',      fr: 'En Préparation', nl: 'In Bereiding' },
+        ready:     { tr: 'Hazır',          en: 'Ready',          fr: 'Prêt',           nl: 'Klaar' },
+        served:    { tr: 'Servis Edildi',  en: 'Served',         fr: 'Servi',          nl: 'Geserveerd' },
+      },
+      statusShort: {
+        new:       { tr: 'Alındı',     en: 'Received',  fr: 'Reçu',     nl: 'Ontvangen' },
+        preparing: { tr: 'Hazırlık',   en: 'Preparing', fr: 'En cours', nl: 'Bereiding' },
+        ready:     { tr: 'Hazır',      en: 'Ready',     fr: 'Prêt',     nl: 'Klaar' },
+        served:    { tr: 'Servis',     en: 'Served',    fr: 'Servi',    nl: 'Geserveerd' },
+      },
+      statusDesc: {
+        new:       { tr: 'Mutfak siparişinizi aldı', en: 'Kitchen received your order', fr: 'La cuisine a reçu votre commande', nl: 'De keuken heeft uw bestelling ontvangen' },
+        preparing: { tr: 'Şefimiz hazırlıyor',       en: 'Our chef is preparing it',    fr: 'Notre chef prépare votre commande', nl: 'Onze chef bereidt het voor' },
+        ready:     { tr: 'Garsonunuz masaya getiriyor', en: 'Your server is bringing it', fr: 'Votre serveur l\'apporte',     nl: 'Uw ober brengt het' },
+        served:    { tr: 'Afiyet olsun!',            en: 'Enjoy your meal!',             fr: 'Bon appétit !',                  nl: 'Eet smakelijk!' },
+      },
+    };
 
     // ── HELPERS ────────────────────────────────────────────────
     const fmt = (n) => `€${n.toFixed(2).replace('.', ',')}`;
+    const detectLang = () => {
+      const stored = localStorage.getItem('olea:lang');
+      if (stored && LANGS.some(l => l.code === stored)) return stored;
+      const nav = (navigator.language || 'tr').slice(0, 2).toLowerCase();
+      return LANGS.some(l => l.code === nav) ? nav : 'tr';
+    };
 
     function getTableFromURL() {
       const p = new URLSearchParams(window.location.search);
@@ -63,18 +123,43 @@
       window.history.replaceState({}, '', url);
     }
 
+    // ── LANG SWITCHER ──────────────────────────────────────────
+    function LangSwitcher({ lang, onChange }) {
+      return (
+        <div className="flex items-center gap-0.5 bg-cream-deep/60 border border-border-soft rounded-full px-1 py-1">
+          {LANGS.map(l => (
+            <button
+              key={l.code}
+              onClick={() => onChange(l.code)}
+              title={l.name}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider transition-colors ${
+                lang === l.code
+                  ? 'bg-charcoal text-cream'
+                  : 'text-muted hover:text-charcoal'
+              }`}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
     // ── HEADER ─────────────────────────────────────────────────
-    function Header({ table, scrolled }) {
+    function Header({ table, scrolled, lang, onLangChange }) {
       return (
         <header className={`sticky top-0 z-30 bg-cream/95 backdrop-blur-sm transition-shadow ${scrolled ? 'header-elevated' : ''}`}>
-          <div className="px-5 pt-safe pb-3 flex items-center justify-between">
-            <div className="flex items-baseline gap-2">
+          <div className="px-4 pt-safe pb-2 flex items-center justify-between gap-3">
+            <div className="flex items-baseline gap-2 flex-shrink-0">
               <span className="font-display text-3xl text-charcoal leading-none italic">Olea</span>
-              <span className="text-[10px] tracking-[0.25em] uppercase text-muted-soft font-medium">Menu</span>
+              <span className="text-[10px] tracking-[0.25em] uppercase text-muted-soft font-medium">{t(UI.menuTag, lang)}</span>
             </div>
+            <LangSwitcher lang={lang} onChange={onLangChange} />
+          </div>
+          <div className="px-4 pb-3 flex justify-end">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-cream-deep/70 border border-border-soft">
               <span className="w-1.5 h-1.5 rounded-full bg-olive shadow-[0_0_0_3px_rgba(90,107,69,0.18)]"></span>
-              <span className="text-[11px] tracking-wide font-medium text-charcoal">Masa {table}</span>
+              <span className="text-[11px] tracking-wide font-medium text-charcoal">{t(UI.table, lang)} {table} · {t(UI.welcome, lang)}</span>
             </div>
           </div>
         </header>
@@ -82,7 +167,7 @@
     }
 
     // ── CATEGORY NAV ───────────────────────────────────────────
-    function CategoryNav({ active, onSelect, hasItems }) {
+    function CategoryNav({ active, onSelect, hasItems, lang }) {
       const ref = useRef(null);
       // Aktif buton görünür alana kayar
       useEffect(() => {
@@ -91,7 +176,7 @@
       }, [active]);
 
       return (
-        <nav className="sticky top-[60px] z-20 bg-cream/95 backdrop-blur-sm cat-nav-shadow">
+        <nav className="sticky top-[110px] z-20 bg-cream/95 backdrop-blur-sm cat-nav-shadow">
           <div ref={ref} className="no-scrollbar overflow-x-auto flex gap-1 px-3 py-2">
             {CATEGORIES.filter(c => hasItems(c.id)).map(c => (
               <button
@@ -104,7 +189,7 @@
                     : 'text-muted hover:text-charcoal'
                 }`}
               >
-                <span className="mr-1.5 text-[13px]">{c.emoji}</span>{c.name}
+                <span className="mr-1.5 text-[13px]">{c.emoji}</span>{t(c.name, lang)}
               </button>
             ))}
           </div>
@@ -113,23 +198,25 @@
     }
 
     // ── ITEM CARD ──────────────────────────────────────────────
-    function ItemCard({ item, qty, onAdd, onRemove }) {
+    function ItemCard({ item, qty, onAdd, onRemove, lang }) {
       const btnRef = useRef(null);
       const handleAdd = () => {
         onAdd(item);
         if (btnRef.current) {
           btnRef.current.classList.remove('add-pulse');
-          // reflow tetikle
           void btnRef.current.offsetWidth;
           btnRef.current.classList.add('add-pulse');
         }
       };
+      const name = t(item.name, lang);
+      const desc = t(item.desc, lang);
+      const priceNote = t(item.priceNote, lang);
 
       return (
         <article className="item-card bg-white border border-border-soft rounded-2xl overflow-hidden flex flex-col">
           <div className="photo-frame relative">
             {item.photo ? (
-              <img src={item.photo} alt={item.name} loading="lazy" />
+              <img src={item.photo} alt={name} loading="lazy" />
             ) : (
               <div className="photo-placeholder w-full h-full">
                 <span>{item.emoji || '🍽️'}</span>
@@ -143,16 +230,16 @@
           </div>
           <div className="p-4 flex flex-col gap-2 flex-1">
             <div className="flex-1">
-              <h3 className="text-[15px] font-medium leading-snug text-charcoal">{item.name}</h3>
-              {item.desc && (
-                <p className="text-[12px] text-muted mt-1 leading-relaxed line-clamp-2">{item.desc}</p>
+              <h3 className="text-[15px] font-medium leading-snug text-charcoal">{name}</h3>
+              {desc && (
+                <p className="text-[12px] text-muted mt-1 leading-relaxed line-clamp-2">{desc}</p>
               )}
             </div>
             <div className="flex items-center justify-between mt-1">
               <div className="flex items-baseline gap-1">
                 <span className="font-display text-xl text-gold">{fmt(item.price)}</span>
-                {item.priceNote && (
-                  <span className="text-[10px] text-muted-soft tracking-wide">/ {item.priceNote}</span>
+                {priceNote && (
+                  <span className="text-[10px] text-muted-soft tracking-wide">/ {priceNote}</span>
                 )}
               </div>
               {qty > 0 ? (
@@ -160,14 +247,14 @@
                   <button
                     onClick={() => onRemove(item)}
                     className="w-7 h-7 rounded-full bg-white border border-border-soft flex items-center justify-center text-charcoal hover:bg-cream"
-                    aria-label="Bir azalt"
+                    aria-label={t(UI.decrease, lang)}
                   >−</button>
                   <span className="text-[13px] font-medium w-4 text-center">{qty}</span>
                   <button
                     ref={btnRef}
                     onClick={handleAdd}
                     className="w-7 h-7 rounded-full bg-gold text-white flex items-center justify-center hover:bg-charcoal"
-                    aria-label="Bir ekle"
+                    aria-label={t(UI.increase, lang)}
                   >+</button>
                 </div>
               ) : (
@@ -175,7 +262,7 @@
                   ref={btnRef}
                   onClick={handleAdd}
                   className="w-9 h-9 rounded-full bg-charcoal text-cream flex items-center justify-center text-lg leading-none hover:bg-gold transition-colors"
-                  aria-label="Sepete ekle"
+                  aria-label={t(UI.addToCart, lang)}
                 >+</button>
               )}
             </div>
@@ -185,7 +272,7 @@
     }
 
     // ── MENU LIST ──────────────────────────────────────────────
-    function MenuList({ cart, onAdd, onRemove, onCategoryEnter, sectionsRef }) {
+    function MenuList({ cart, onAdd, onRemove, onCategoryEnter, sectionsRef, lang }) {
       // Scroll-based aktif kategori takibi (IntersectionObserver yerine
       // basit scroll handler — yatay da dikey de kararli, jitter yok)
       useEffect(() => {
@@ -248,8 +335,8 @@
                 className="mb-10"
               >
                 <div className="flex items-baseline gap-3 mb-4 px-1">
-                  <h2 className="font-display text-3xl text-charcoal italic">{c.name}</h2>
-                  <span className="text-[10px] uppercase tracking-[0.18em] text-muted-soft">{items.length} ürün</span>
+                  <h2 className="font-display text-3xl text-charcoal italic">{t(c.name, lang)}</h2>
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-muted-soft">{items.length} {t(UI.itemsLower, lang)}</span>
                 </div>
                 <div className="menu-grid">
                   {items.map(item => (
@@ -259,6 +346,7 @@
                       qty={qtyMap[item.id] || 0}
                       onAdd={onAdd}
                       onRemove={onRemove}
+                      lang={lang}
                     />
                   ))}
                 </div>
@@ -266,14 +354,14 @@
             );
           })}
           <div className="text-center text-[10px] tracking-[0.2em] uppercase text-muted-soft py-6">
-            ── Olea · Brunch & Coffee ──
+            ── Olea · {t(UI.brandTag, lang)} ──
           </div>
         </main>
       );
     }
 
     // ── CART PILL (yüzen sepet butonu) ─────────────────────────
-    function CartPill({ count, total, onClick }) {
+    function CartPill({ count, total, onClick, lang }) {
       if (count === 0) return null;
       return (
         <button
@@ -282,14 +370,14 @@
           style={{ boxShadow: '0 16px 40px -16px rgba(44,42,38,0.5)' }}
         >
           <span className="bg-gold w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold">{count}</span>
-          <span className="text-[13px] font-medium flex-1 text-left">Sepetimi Görüntüle</span>
+          <span className="text-[13px] font-medium flex-1 text-left">{t(UI.viewCart, lang)}</span>
           <span className="font-display text-lg text-gold-soft">{fmt(total)}</span>
         </button>
       );
     }
 
     // ── CART MODAL ─────────────────────────────────────────────
-    function CartModal({ cart, notes, onClose, onAdd, onRemove, onSetNotes, onSubmit }) {
+    function CartModal({ cart, notes, onClose, onAdd, onRemove, onSetNotes, onSubmit, lang }) {
       const total = cart.reduce((s, it) => s + it.price * it.qty, 0);
       const count = cart.reduce((s, it) => s + it.qty, 0);
 
@@ -298,15 +386,15 @@
           <div className="modal-content mt-auto bg-cream w-full sm:max-w-lg sm:mx-auto sm:my-auto sm:rounded-3xl rounded-t-3xl flex flex-col max-h-[92vh] overflow-hidden">
             <div className="px-5 py-4 border-b flex items-center justify-between">
               <div>
-                <h2 className="font-display text-2xl italic">Sepetin</h2>
-                <p className="text-[12px] text-muted mt-0.5">{count} ürün</p>
+                <h2 className="font-display text-2xl italic">{t(UI.yourCart, lang)}</h2>
+                <p className="text-[12px] text-muted mt-0.5">{count} {t(UI.itemsLower, lang)}</p>
               </div>
-              <button onClick={onClose} className="w-9 h-9 rounded-full bg-cream-deep flex items-center justify-center text-charcoal hover:bg-border-soft" aria-label="Kapat">✕</button>
+              <button onClick={onClose} className="w-9 h-9 rounded-full bg-cream-deep flex items-center justify-center text-charcoal hover:bg-border-soft" aria-label={t(UI.close, lang)}>✕</button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
               {cart.length === 0 ? (
-                <div className="text-center text-muted py-12">Sepetin boş.</div>
+                <div className="text-center text-muted py-12">{t(UI.cartEmpty, lang)}</div>
               ) : (
                 <ul className="divide-y divide-border-soft">
                   {cart.map(item => (
@@ -323,9 +411,9 @@
                         <div className="text-[12px] text-muted">{fmt(item.price)} × {item.qty}</div>
                       </div>
                       <div className="flex items-center gap-2 bg-white rounded-full p-1 border border-border-soft">
-                        <button onClick={() => onRemove(item)} className="w-7 h-7 rounded-full hover:bg-cream-deep flex items-center justify-center" aria-label="Azalt">−</button>
+                        <button onClick={() => onRemove(item)} className="w-7 h-7 rounded-full hover:bg-cream-deep flex items-center justify-center" aria-label={t(UI.decrease, lang)}>−</button>
                         <span className="text-[13px] font-medium w-4 text-center">{item.qty}</span>
-                        <button onClick={() => onAdd(item)} className="w-7 h-7 rounded-full bg-gold text-white flex items-center justify-center" aria-label="Artır">+</button>
+                        <button onClick={() => onAdd(item)} className="w-7 h-7 rounded-full bg-gold text-white flex items-center justify-center" aria-label={t(UI.increase, lang)}>+</button>
                       </div>
                     </li>
                   ))}
@@ -334,11 +422,11 @@
 
               {cart.length > 0 && (
                 <div className="mt-5">
-                  <label className="block text-[12px] tracking-wide uppercase text-muted-soft mb-2 font-medium">Sipariş Notu (opsiyonel)</label>
+                  <label className="block text-[12px] tracking-wide uppercase text-muted-soft mb-2 font-medium">{t(UI.orderNote, lang)}</label>
                   <textarea
                     value={notes}
                     onChange={(e) => onSetNotes(e.target.value)}
-                    placeholder="örn. az pişmiş yumurta, sütsüz latte…"
+                    placeholder={t(UI.notePh, lang)}
                     className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white resize-none focus:outline-none focus:border-gold text-[13px] leading-relaxed"
                     rows={3}
                   />
@@ -349,16 +437,16 @@
             {cart.length > 0 && (
               <div className="px-5 py-4 border-t bg-white">
                 <div className="flex items-baseline justify-between mb-3">
-                  <span className="text-[13px] tracking-wide uppercase text-muted">Toplam</span>
+                  <span className="text-[13px] tracking-wide uppercase text-muted">{t(UI.total, lang)}</span>
                   <span className="font-display text-3xl text-charcoal">{fmt(total)}</span>
                 </div>
                 <button
                   onClick={onSubmit}
                   className="w-full py-4 rounded-2xl bg-charcoal text-cream font-medium tracking-wide hover:bg-gold transition-colors"
                 >
-                  Siparişi Gönder
+                  {t(UI.placeOrder, lang)}
                 </button>
-                <p className="text-[10px] tracking-wide text-center text-muted-soft mt-2">Ödeme masada alınır</p>
+                <p className="text-[10px] tracking-wide text-center text-muted-soft mt-2">{t(UI.payAtTable, lang)}</p>
               </div>
             )}
           </div>
@@ -367,7 +455,7 @@
     }
 
     // ── TABLE PROMPT (URL'de masa yoksa) ───────────────────────
-    function TablePrompt({ onSet }) {
+    function TablePrompt({ onSet, lang, onLangChange }) {
       const [val, setVal] = useState('');
       const submit = (e) => {
         e?.preventDefault();
@@ -376,19 +464,22 @@
       };
       return (
         <div className="fixed inset-0 z-50 bg-cream flex flex-col items-center justify-center px-6">
+          <div className="absolute top-4 right-4 pt-safe">
+            <LangSwitcher lang={lang} onChange={onLangChange} />
+          </div>
           <div className="text-center mb-8">
             <div className="font-display text-5xl italic text-charcoal mb-2">Olea</div>
-            <div className="text-[11px] tracking-[0.3em] uppercase text-muted">Brunch & Coffee</div>
+            <div className="text-[11px] tracking-[0.3em] uppercase text-muted">{t(UI.brandTag, lang)}</div>
           </div>
           <form onSubmit={submit} className="w-full max-w-xs">
-            <label className="block text-[12px] tracking-wide uppercase text-muted-soft mb-2 text-center">Masa Numaranız</label>
+            <label className="block text-[12px] tracking-wide uppercase text-muted-soft mb-2 text-center">{t(UI.enterTable, lang)}</label>
             <input
               type="number"
               inputMode="numeric"
               autoFocus
               value={val}
               onChange={(e) => setVal(e.target.value)}
-              placeholder="örn. 5"
+              placeholder={t(UI.tablePh, lang)}
               className="w-full px-5 py-4 rounded-2xl border-2 border-border-soft bg-white text-center text-2xl font-display focus:outline-none focus:border-gold"
             />
             <button
@@ -396,32 +487,18 @@
               disabled={!val}
               className="w-full mt-3 py-4 rounded-2xl bg-charcoal text-cream font-medium disabled:opacity-40 hover:bg-gold transition-colors"
             >
-              Menüyü Aç
+              {t(UI.openMenu, lang)}
             </button>
           </form>
           <p className="text-[11px] text-muted-soft mt-6 text-center max-w-xs">
-            Normalde QR kod ile otomatik gelir. Bu ekranı görüyorsan, masa numarasını manuel gir.
+            {t(UI.tableHelp, lang)}
           </p>
         </div>
       );
     }
 
     // ── CONFIRMATION ───────────────────────────────────────────
-    const STATUS_LABEL = {
-      new: 'Sipariş Alındı',
-      preparing: 'Hazırlanıyor',
-      ready: 'Hazır',
-      served: 'Servis Edildi',
-    };
-
-    const STATUS_DESC = {
-      new: 'Mutfak siparişinizi aldı',
-      preparing: 'Şefimiz hazırlıyor',
-      ready: 'Garsonunuz masaya getiriyor',
-      served: 'Afiyet olsun!',
-    };
-
-    function StatusFlow({ status }) {
+    function StatusFlow({ status, lang }) {
       const stages = ['new', 'preparing', 'ready', 'served'];
       const idx = stages.indexOf(status);
       return (
@@ -431,7 +508,7 @@
               <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
                 <div className={`w-3 h-3 rounded-full transition-all ${i <= idx ? 'bg-olive scale-110' : 'bg-border-soft'}`}></div>
                 <div className={`text-[9px] tracking-wide uppercase ${i <= idx ? 'text-olive font-medium' : 'text-muted-soft'}`}>
-                  {STATUS_LABEL[s].split(' ')[0]}
+                  {t(UI.statusShort[s], lang)}
                 </div>
               </div>
               {i < stages.length - 1 && (
@@ -443,7 +520,7 @@
       );
     }
 
-    function ConfirmationScreen({ orderId, onNew, table }) {
+    function ConfirmationScreen({ orderId, onNew, lang, onLangChange }) {
       const [order, setOrder] = useState(() => store.getOrderById(orderId));
 
       useEffect(() => {
@@ -457,27 +534,30 @@
       }, [orderId]);
 
       if (!order) {
-        return <div className="min-h-screen flex items-center justify-center text-muted">Sipariş bulunamadı.</div>;
+        return <div className="min-h-screen flex items-center justify-center text-muted">{t(UI.orderNotFound, lang)}</div>;
       }
 
       return (
         <div className="min-h-screen flex flex-col bg-cream">
+          <div className="absolute top-4 right-4 pt-safe">
+            <LangSwitcher lang={lang} onChange={onLangChange} />
+          </div>
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
             <div className="tick-circle w-20 h-20 rounded-full bg-olive/15 flex items-center justify-center mb-6">
               <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
                 <path d="M10 20 L17 27 L30 13" stroke="#5A6B45" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h1 className="font-display text-4xl italic text-charcoal mb-2">{STATUS_LABEL[order.status]}</h1>
-            <p className="text-muted mb-1">{STATUS_DESC[order.status]}</p>
-            <p className="text-[13px] text-muted-soft mb-8">Masa {order.table} · ~15 dakika</p>
+            <h1 className="font-display text-4xl italic text-charcoal mb-2">{t(UI.status[order.status], lang)}</h1>
+            <p className="text-muted mb-1">{t(UI.statusDesc[order.status], lang)}</p>
+            <p className="text-[13px] text-muted-soft mb-8">{t(UI.table, lang)} {order.table} · {t(UI.approxTime, lang)}</p>
 
             <div className="w-full max-w-md mb-10">
-              <StatusFlow status={order.status} />
+              <StatusFlow status={order.status} lang={lang} />
             </div>
 
             <div className="bg-white border border-border-soft rounded-2xl p-5 w-full max-w-md text-left mb-6">
-              <div className="text-[11px] tracking-[0.18em] uppercase text-muted-soft mb-3">Sipariş Özeti</div>
+              <div className="text-[11px] tracking-[0.18em] uppercase text-muted-soft mb-3">{t(UI.orderSummary, lang)}</div>
               <ul className="divide-y divide-border-soft">
                 {order.items.map(it => (
                   <li key={it.id} className="py-2 flex justify-between gap-2 text-[13px]">
@@ -490,7 +570,7 @@
                 <div className="mt-3 pt-3 border-t text-[12px] text-muted italic">"{order.notes}"</div>
               )}
               <div className="mt-3 pt-3 border-t flex justify-between items-baseline">
-                <span className="text-[12px] uppercase tracking-wide text-muted">Toplam</span>
+                <span className="text-[12px] uppercase tracking-wide text-muted">{t(UI.total, lang)}</span>
                 <span className="font-display text-2xl text-charcoal">{fmt(order.total)}</span>
               </div>
             </div>
@@ -499,7 +579,7 @@
               onClick={onNew}
               className="text-[13px] underline text-muted hover:text-charcoal"
             >
-              Tekrar sipariş ver
+              {t(UI.newOrder, lang)}
             </button>
           </div>
         </div>
@@ -508,6 +588,7 @@
 
     // ── ROOT APP ───────────────────────────────────────────────
     function App() {
+      const [lang, setLang] = useState(detectLang);
       const [table, setTable] = useState(getTableFromURL);
       const [view, setView] = useState('menu'); // menu | confirmation
       const [activeCategory, setActiveCategory] = useState(CATEGORIES[0].id);
@@ -522,6 +603,12 @@
       const sectionsRef = useRef({});
       const programmaticScrollRef = useRef(false);
       const programmaticTimeoutRef = useRef(null);
+
+      // Dil secimi localStorage'a kaydedilir + html lang attribute guncellenir
+      useEffect(() => {
+        localStorage.setItem('olea:lang', lang);
+        document.documentElement.lang = lang;
+      }, [lang]);
 
       // Scroll listener (header gölgesi)
       useEffect(() => {
@@ -546,6 +633,7 @@
       };
 
       const handleAdd = useCallback((item) => {
+        const localizedName = t(item.name, lang);
         setCart(prev => {
           const idx = prev.findIndex(i => i.id === item.id);
           if (idx >= 0) {
@@ -554,12 +642,12 @@
             return next;
           }
           return [...prev, {
-            id: item.id, name: item.name, price: item.price,
+            id: item.id, name: localizedName, price: item.price,
             photo: item.photo, emoji: item.emoji, qty: 1,
           }];
         });
-        setToast(`${item.name} sepete eklendi`);
-      }, []);
+        setToast(`${localizedName} ${t(UI.addedToCart, lang)}`);
+      }, [lang]);
 
       const handleRemove = useCallback((item) => {
         setCart(prev => {
@@ -622,25 +710,26 @@
 
       // ── Render ───────────────────────────────────────
       if (table === null) {
-        return <TablePrompt onSet={handleSetTable} />;
+        return <TablePrompt onSet={handleSetTable} lang={lang} onLangChange={setLang} />;
       }
 
       if (view === 'confirmation' && activeOrderId) {
-        return <ConfirmationScreen orderId={activeOrderId} onNew={handleNewOrder} table={table} />;
+        return <ConfirmationScreen orderId={activeOrderId} onNew={handleNewOrder} lang={lang} onLangChange={setLang} />;
       }
 
       return (
         <>
-          <Header table={table} scrolled={scrolled} />
-          <CategoryNav active={activeCategory} onSelect={handleCategoryClick} hasItems={hasItems} />
+          <Header table={table} scrolled={scrolled} lang={lang} onLangChange={setLang} />
+          <CategoryNav active={activeCategory} onSelect={handleCategoryClick} hasItems={hasItems} lang={lang} />
           <MenuList
             cart={cart}
             onAdd={handleAdd}
             onRemove={handleRemove}
             onCategoryEnter={handleCategoryEnter}
             sectionsRef={sectionsRef}
+            lang={lang}
           />
-          <CartPill count={cartCount} total={cartTotal} onClick={() => setCartOpen(true)} />
+          <CartPill count={cartCount} total={cartTotal} onClick={() => setCartOpen(true)} lang={lang} />
           {cartOpen && (
             <CartModal
               cart={cart}
@@ -650,6 +739,7 @@
               onRemove={handleRemove}
               onSetNotes={setNotes}
               onSubmit={handleSubmit}
+              lang={lang}
             />
           )}
           {toast && <div className="toast">{toast}</div>}

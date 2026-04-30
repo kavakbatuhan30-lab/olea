@@ -9,3 +9,6 @@ Thumbs.db
 
 # Local geçici
 *.log
+
+# Claude Code lokal ayarları (kullanıcıya özel)
+.claude/settings.local.json
