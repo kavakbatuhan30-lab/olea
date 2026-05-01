@@ -40,12 +40,13 @@ export const MENU = [
   // ─── KAHVALTI ──────────────────────────────────────
   { id: 'serpme',         cat: 'breakfast', name: 'Olea Serpme',
     desc: D(
-      '2 kişilik klasik kahvaltı tabağı, peynirler, zeytin, reçeller, simit, börek',
-      'Classic breakfast platter for 2, cheeses, olives, jams, simit, börek',
-      'Plateau de petit-déjeuner classique pour 2, fromages, olives, confitures, simit, börek',
-      'Klassiek ontbijtbord voor 2, kazen, olijven, jam, simit, börek'
+      'Klasik paylaşımlı kahvaltı tabağı: peynirler, zeytin, reçeller, simit, börek',
+      'Classic shared breakfast platter: cheeses, olives, jams, simit, börek',
+      'Plateau de petit-déjeuner partagé classique : fromages, olives, confitures, simit, börek',
+      'Klassiek gedeeld ontbijtbord: kazen, olijven, jam, simit, börek'
     ),
     priceNote: D('kişi başı', 'per person', 'par personne', 'per persoon'),
+    serves: { min: 2, step: 2, max: 8 },
     price: 25.00, photo: 'photos/serpme-platter.jpg' },
 
   { id: 'simit',          cat: 'breakfast', name: 'Simit',

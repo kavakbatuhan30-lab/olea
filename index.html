@@ -80,6 +80,9 @@
       newOrder:      { tr: 'Tekrar sipariş ver', en: 'Place a new order', fr: 'Nouvelle commande', nl: 'Nieuwe bestelling' },
       approxTime:    { tr: '~15 dakika', en: '~15 minutes', fr: '~15 minutes', nl: '~15 minuten' },
       addedToCart:   { tr: 'sepete eklendi', en: 'added to cart', fr: 'ajouté au panier', nl: 'toegevoegd' },
+      people:        { tr: 'kişi',           en: 'people',        fr: 'personnes',         nl: 'personen' },
+      forPeople:     { tr: 'için',           en: 'for',           fr: 'pour',              nl: 'voor' },
+      minPeople:     { tr: 'min.',           en: 'min.',          fr: 'min.',              nl: 'min.' },
       orderNotFound: { tr: 'Sipariş bulunamadı.', en: 'Order not found.', fr: 'Commande introuvable.', nl: 'Bestelling niet gevonden.' },
       status: {
         new:       { tr: 'Sipariş Alındı', en: 'Order Received', fr: 'Commande Reçue', nl: 'Bestelling Ontvangen' },
@@ -200,17 +203,26 @@
     // ── ITEM CARD ──────────────────────────────────────────────
     function ItemCard({ item, qty, onAdd, onRemove, lang }) {
       const btnRef = useRef(null);
+      const isServes = !!item.serves;
+      const step = isServes ? item.serves.step : 1;
+      const max = isServes ? item.serves.max : 99;
+
       const handleAdd = () => {
-        onAdd(item);
+        if (qty + step > max) return;
+        onAdd(item, step);
         if (btnRef.current) {
           btnRef.current.classList.remove('add-pulse');
           void btnRef.current.offsetWidth;
           btnRef.current.classList.add('add-pulse');
         }
       };
+      const handleRemove = () => onRemove(item, step);
+
       const name = t(item.name, lang);
       const desc = t(item.desc, lang);
       const priceNote = t(item.priceNote, lang);
+      const peopleWord = t(UI.people, lang);
+      const atMax = isServes && qty >= max;
 
       return (
         <article className="item-card bg-white border border-border-soft rounded-2xl overflow-hidden flex flex-col">
@@ -224,7 +236,12 @@
             )}
             {qty > 0 && (
               <div className="absolute top-2 left-2 bg-charcoal text-cream text-[11px] font-medium px-2 py-0.5 rounded-full">
-                ×{qty}
+                {isServes ? `${qty} ${peopleWord}` : `×${qty}`}
+              </div>
+            )}
+            {isServes && (
+              <div className="absolute top-2 right-2 bg-gold text-white text-[9px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-full">
+                {t(UI.minPeople, lang)} {item.serves.min} {peopleWord}
               </div>
             )}
           </div>
@@ -243,17 +260,20 @@
                 )}
               </div>
               {qty > 0 ? (
-                <div className="flex items-center gap-2 bg-cream-deep rounded-full px-1 py-1">
+                <div className="flex items-center gap-1.5 bg-cream-deep rounded-full px-1 py-1">
                   <button
-                    onClick={() => onRemove(item)}
+                    onClick={handleRemove}
                     className="w-7 h-7 rounded-full bg-white border border-border-soft flex items-center justify-center text-charcoal hover:bg-cream"
                     aria-label={t(UI.decrease, lang)}
                   >−</button>
-                  <span className="text-[13px] font-medium w-4 text-center">{qty}</span>
+                  <span className="text-[13px] font-medium px-1 text-center min-w-[36px]">
+                    {isServes ? `${qty} ${peopleWord}` : qty}
+                  </span>
                   <button
                     ref={btnRef}
                     onClick={handleAdd}
-                    className="w-7 h-7 rounded-full bg-gold text-white flex items-center justify-center hover:bg-charcoal"
+                    disabled={atMax}
+                    className={`w-7 h-7 rounded-full text-white flex items-center justify-center transition-colors ${atMax ? 'bg-muted-soft cursor-not-allowed' : 'bg-gold hover:bg-charcoal'}`}
                     aria-label={t(UI.increase, lang)}
                   >+</button>
                 </div>
@@ -266,6 +286,12 @@
                 >+</button>
               )}
             </div>
+            {isServes && qty > 0 && (
+              <div className="text-[11px] text-muted-soft tracking-wide pt-1 border-t border-border-soft mt-1 flex justify-between">
+                <span>{qty} {peopleWord} {t(UI.forPeople, lang)}</span>
+                <span className="font-display text-charcoal text-[14px]">{fmt(item.price * qty)}</span>
+              </div>
+            )}
           </div>
         </article>
       );
@@ -408,12 +434,18 @@
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[14px] font-medium text-charcoal truncate">{item.name}</div>
-                        <div className="text-[12px] text-muted">{fmt(item.price)} × {item.qty}</div>
+                        <div className="text-[12px] text-muted">
+                          {item.serves
+                            ? `${fmt(item.price)} × ${item.qty} ${t(UI.people, lang)} = ${fmt(item.price * item.qty)}`
+                            : `${fmt(item.price)} × ${item.qty}`}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 bg-white rounded-full p-1 border border-border-soft">
-                        <button onClick={() => onRemove(item)} className="w-7 h-7 rounded-full hover:bg-cream-deep flex items-center justify-center" aria-label={t(UI.decrease, lang)}>−</button>
-                        <span className="text-[13px] font-medium w-4 text-center">{item.qty}</span>
-                        <button onClick={() => onAdd(item)} className="w-7 h-7 rounded-full bg-gold text-white flex items-center justify-center" aria-label={t(UI.increase, lang)}>+</button>
+                      <div className="flex items-center gap-1.5 bg-white rounded-full p-1 border border-border-soft">
+                        <button onClick={() => onRemove(item, item.serves?.step || 1)} className="w-7 h-7 rounded-full hover:bg-cream-deep flex items-center justify-center" aria-label={t(UI.decrease, lang)}>−</button>
+                        <span className="text-[13px] font-medium px-1 text-center min-w-[24px]">
+                          {item.qty}
+                        </span>
+                        <button onClick={() => onAdd(item, item.serves?.step || 1)} className="w-7 h-7 rounded-full bg-gold text-white flex items-center justify-center" aria-label={t(UI.increase, lang)}>+</button>
                       </div>
                     </li>
                   ))}
@@ -561,7 +593,11 @@
               <ul className="divide-y divide-border-soft">
                 {order.items.map(it => (
                   <li key={it.id} className="py-2 flex justify-between gap-2 text-[13px]">
-                    <span className="text-charcoal">{it.qty}× {it.name}</span>
+                    <span className="text-charcoal">
+                      {it.isServes
+                        ? `${it.name} · ${it.qty} ${t(UI.people, lang)}`
+                        : `${it.qty}× ${it.name}`}
+                    </span>
                     <span className="text-muted">{fmt(it.price * it.qty)}</span>
                   </li>
                 ))}
@@ -632,32 +668,37 @@
         setTableInURL(n);
       };
 
-      const handleAdd = useCallback((item) => {
+      const handleAdd = useCallback((item, n = 1) => {
         const localizedName = t(item.name, lang);
+        const isServes = !!item.serves;
         setCart(prev => {
           const idx = prev.findIndex(i => i.id === item.id);
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
+            next[idx] = { ...next[idx], qty: next[idx].qty + n };
             return next;
           }
           return [...prev, {
             id: item.id, name: localizedName, price: item.price,
-            photo: item.photo, emoji: item.emoji, qty: 1,
+            photo: item.photo, emoji: item.emoji, qty: n,
+            serves: item.serves,
           }];
         });
-        setToast(`${localizedName} ${t(UI.addedToCart, lang)}`);
+        const suffix = isServes ? ` (${n} ${t(UI.people, lang)})` : '';
+        setToast(`${localizedName}${suffix} ${t(UI.addedToCart, lang)}`);
       }, [lang]);
 
-      const handleRemove = useCallback((item) => {
+      const handleRemove = useCallback((item, n = 1) => {
+        const min = item.serves?.min || 1;
         setCart(prev => {
           const idx = prev.findIndex(i => i.id === item.id);
           if (idx < 0) return prev;
           const next = [...prev];
-          if (next[idx].qty <= 1) {
+          const newQty = next[idx].qty - n;
+          if (newQty < min) {
             next.splice(idx, 1);
           } else {
-            next[idx] = { ...next[idx], qty: next[idx].qty - 1 };
+            next[idx] = { ...next[idx], qty: newQty };
           }
           return next;
         });
@@ -666,7 +707,10 @@
       const handleSubmit = () => {
         const order = store.placeOrder({
           table,
-          items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+          items: cart.map(i => ({
+            id: i.id, name: i.name, price: i.price, qty: i.qty,
+            isServes: !!i.serves,
+          })),
           notes,
           total: cartTotal,
         });

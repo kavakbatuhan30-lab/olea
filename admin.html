@@ -63,6 +63,7 @@
       newOrderTitle: { tr: 'Yeni Sipariş', en: 'New Order', fr: 'Nouvelle Commande', nl: 'Nieuwe Bestelling' },
       cancelConfirm: { tr: 'Bu siparişi iptal et?', en: 'Cancel this order?', fr: 'Annuler cette commande ?', nl: 'Deze bestelling annuleren?' },
       cancelTip:     { tr: 'Siparişi iptal et', en: 'Cancel order', fr: 'Annuler la commande', nl: 'Bestelling annuleren' },
+      people:        { tr: 'kişi',              en: 'people',       fr: 'personnes',         nl: 'personen' },
       clearConfirm:  { tr: 'Tüm aktif ve geçmiş siparişler silinsin mi? (Demo amaçlı)',
                        en: 'Delete all active and past orders? (Demo only)',
                        fr: 'Supprimer toutes les commandes actives et passées ? (Démo)',
@@ -259,8 +260,18 @@
               {order.items.map(it => (
                 <li key={it.id} className="flex justify-between gap-3 text-[13px]">
                   <span className="text-charcoal">
-                    <span className="inline-block min-w-[24px] text-gold font-semibold">{it.qty}×</span>
-                    {it.name}
+                    {it.isServes ? (
+                      <>
+                        <span className="inline-block min-w-[24px] text-gold font-semibold">{it.qty}</span>
+                        <span className="mr-1 text-[11px] uppercase tracking-wide text-gold font-semibold">{t(UI.people, lang)}</span>
+                        {it.name}
+                      </>
+                    ) : (
+                      <>
+                        <span className="inline-block min-w-[24px] text-gold font-semibold">{it.qty}×</span>
+                        {it.name}
+                      </>
+                    )}
                   </span>
                   <span className="text-muted text-[12px]">{fmt(it.price * it.qty)}</span>
                 </li>
