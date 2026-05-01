@@ -1,0 +1,33 @@
+// Olea Firestore Güvenlik Kuralları
+//
+// NASIL UYGULANIR:
+// 1. https://console.firebase.google.com → olea projesi → Firestore Database
+// 2. Üst sekmelerden "Rules" tıkla
+// 3. Aşağıdaki bloğu (satır 14'ten itibaren) komple kopyala-yapıştır
+// 4. "Publish" bas
+//
+// AÇIKLAMA:
+// - 'orders' ve 'archive' koleksiyonlarına HERKES okuyup yazabilir
+// - Bu, demo/MVP için yeterlidir (anonim müşteriler sipariş verir, herkese açık panel)
+// - Production için: customer'ı 'orders' yazmaya, admin'i her şeye yetkilendir
+//   (Firebase Auth + custom claim ile)
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Demo/MVP — sipariş okuma+yazma herkese açık
+    match /orders/{orderId} {
+      allow read, write: if true;
+    }
+    match /archive/{orderId} {
+      allow read, write: if true;
+    }
+
+    // Diğer her şey kapalı
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -74,6 +74,7 @@
                        nl: 'bv. zachte eieren, latte zonder melk…' },
       total:         { tr: 'Toplam',     en: 'Total',    fr: 'Total',   nl: 'Totaal' },
       placeOrder:    { tr: 'Siparişi Gönder', en: 'Place Order', fr: 'Passer la Commande', nl: 'Bestelling Plaatsen' },
+      sending:       { tr: 'Gönderiliyor…', en: 'Sending…', fr: 'Envoi…', nl: 'Verzenden…' },
       payAtTable:    { tr: 'Ödeme masada alınır', en: 'Payment at the table', fr: 'Paiement à la table', nl: 'Betaling aan tafel' },
       close:         { tr: 'Kapat',      en: 'Close',    fr: 'Fermer',  nl: 'Sluiten' },
       orderSummary:  { tr: 'Sipariş Özeti', en: 'Order Summary', fr: 'Résumé de Commande', nl: 'Besteloverzicht' },
@@ -403,7 +404,7 @@
     }
 
     // ── CART MODAL ─────────────────────────────────────────────
-    function CartModal({ cart, notes, onClose, onAdd, onRemove, onSetNotes, onSubmit, lang }) {
+    function CartModal({ cart, notes, onClose, onAdd, onRemove, onSetNotes, onSubmit, lang, submitting }) {
       const total = cart.reduce((s, it) => s + it.price * it.qty, 0);
       const count = cart.reduce((s, it) => s + it.qty, 0);
 
@@ -474,9 +475,12 @@
                 </div>
                 <button
                   onClick={onSubmit}
-                  className="w-full py-4 rounded-2xl bg-charcoal text-cream font-medium tracking-wide hover:bg-gold transition-colors"
+                  disabled={submitting}
+                  className={`w-full py-4 rounded-2xl font-medium tracking-wide transition-colors ${
+                    submitting ? 'bg-muted-soft text-cream cursor-wait' : 'bg-charcoal text-cream hover:bg-gold'
+                  }`}
                 >
-                  {t(UI.placeOrder, lang)}
+                  {submitting ? t(UI.sending, lang) : t(UI.placeOrder, lang)}
                 </button>
                 <p className="text-[10px] tracking-wide text-center text-muted-soft mt-2">{t(UI.payAtTable, lang)}</p>
               </div>
@@ -704,22 +708,32 @@
         });
       }, []);
 
-      const handleSubmit = () => {
-        const order = store.placeOrder({
-          table,
-          items: cart.map(i => ({
-            id: i.id, name: i.name, price: i.price, qty: i.qty,
-            isServes: !!i.serves,
-          })),
-          notes,
-          total: cartTotal,
-        });
-        setActiveOrderId(order.id);
-        setCart([]);
-        setNotes('');
-        setCartOpen(false);
-        setView('confirmation');
-        window.scrollTo(0, 0);
+      const [submitting, setSubmitting] = useState(false);
+      const handleSubmit = async () => {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+          const order = await store.placeOrder({
+            table,
+            items: cart.map(i => ({
+              id: i.id, name: i.name, price: i.price, qty: i.qty,
+              isServes: !!i.serves,
+            })),
+            notes,
+            total: cartTotal,
+          });
+          setActiveOrderId(order.id);
+          setCart([]);
+          setNotes('');
+          setCartOpen(false);
+          setView('confirmation');
+          window.scrollTo(0, 0);
+        } catch (err) {
+          console.error('Sipariş gönderilemedi', err);
+          alert('Sipariş gönderilemedi: ' + (err.message || err));
+        } finally {
+          setSubmitting(false);
+        }
       };
 
       const handleNewOrder = () => {
@@ -784,6 +798,7 @@
               onSetNotes={setNotes}
               onSubmit={handleSubmit}
               lang={lang}
+              submitting={submitting}
             />
           )}
           {toast && <div className="toast">{toast}</div>}
