@@ -1,7 +1,10 @@
 // Olea sipariş deposu — Firebase Firestore versiyonu
 // Cihazlar arası gerçek-zamanlı sync. Telefon → laptop / mutfak / her yerde anlık.
 
-import { initializeApp } from 'https://esm.sh/firebase@10.13.2/app';
+// Firebase'in resmi gstatic CDN'inden ESM modülleri (modüller birbiriyle uyumlu).
+// esm.sh'nin firebase/app ve firebase/firestore'u ayrı bundle olarak verip
+// singleton'u paylaşmadığını gördük → resmi CDN bunu çözüyor.
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
 import {
   getFirestore,
   collection,
@@ -15,7 +18,7 @@ import {
   orderBy,
   serverTimestamp,
   writeBatch,
-} from 'https://esm.sh/firebase@10.13.2/firestore';
+} from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 
 // ── Firebase config (Olea project) ─────────────────────────
 const firebaseConfig = {

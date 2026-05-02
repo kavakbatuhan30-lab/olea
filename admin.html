@@ -48,7 +48,7 @@
     import React, { useState, useEffect, useMemo, useRef, useCallback } from 'https://esm.sh/react@18.3.1';
     import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
     import { LANGS, t } from './menu.js';
-    import * as store from './store.js';
+    import * as store from './store.js?v=2';
 
     // ── i18n ───────────────────────────────────────────────────
     const UI = {
@@ -447,18 +447,18 @@
       }, [soundOn, refresh, lang]);
 
       const handleAdvance = (id, status) => {
-        store.updateOrderStatus(id, status);
+        store.updateOrderStatus(id, status).catch(err => console.error('[admin] updateStatus failed', err));
         refresh();
       };
 
       const handleCancel = (id) => {
-        store.deleteOrder(id);
+        store.deleteOrder(id).catch(err => console.error('[admin] deleteOrder failed', err));
         refresh();
       };
 
       const handleClear = () => {
         if (confirm(t(UI.clearConfirm, lang))) {
-          store.clearAll();
+          store.clearAll().catch(err => console.error('[admin] clearAll failed', err));
           refresh();
         }
       };
