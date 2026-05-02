@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Olea — Masa QR Kodları</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: '#FBF7F0',
+            'cream-deep': '#F5EFE3',
+            charcoal: '#2C2A26',
+            muted: '#7A746B',
+            'muted-soft': '#A89F92',
+            gold: '#B8956A',
+            'gold-soft': '#D4B896',
+            olive: '#5A6B45',
+            'border-soft': '#E8E0D0',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Cormorant Garamond', 'Georgia', 'serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    @page { size: A4; margin: 1cm; }
+    @media print {
+      body { background: white !important; }
+      .no-print { display: none !important; }
+      .qr-grid { gap: 0.5cm !important; }
+      .qr-card { break-inside: avoid; box-shadow: none !important; border: 1px dashed #E8E0D0 !important; }
+    }
+    .qr-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.2rem;
+    }
+    .qr-card {
+      background: white;
+      border: 1px solid #E8E0D0;
+      border-radius: 16px;
+      padding: 1.25rem;
+      text-align: center;
+      box-shadow: 0 8px 24px -16px rgba(44,42,38,0.15);
+      break-inside: avoid;
+    }
+    .qr-card img {
+      width: 100%;
+      max-width: 180px;
+      height: auto;
+      margin: 0.5rem auto;
+      display: block;
+    }
+  </style>
+</head>
+<body class="bg-cream text-charcoal font-sans antialiased min-h-screen">
+
+  <!-- Üst kontrol bar (yazdırırken kaybolur) -->
+  <header class="no-print sticky top-0 bg-cream/95 backdrop-blur-sm border-b border-border-soft z-10">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-baseline gap-2">
+        <span class="font-display text-3xl italic">Olea</span>
+        <span class="text-[10px] tracking-[0.3em] uppercase text-muted">Masa QR Üretici</span>
+      </div>
+
+      <div class="flex items-center gap-3 flex-wrap">
+        <label class="text-[12px] text-muted">Site URL'si:</label>
+        <input id="baseUrl" type="text" class="px-3 py-1.5 rounded-lg border border-border-soft bg-white text-[13px] w-72" placeholder="https://...github.io/olea/" />
+
+        <label class="text-[12px] text-muted">Masa sayısı:</label>
+        <input id="tableCount" type="number" min="1" max="100" value="15" class="px-3 py-1.5 rounded-lg border border-border-soft bg-white text-[13px] w-16" />
+
+        <button id="regenBtn" class="px-4 py-1.5 rounded-lg bg-charcoal text-cream text-[13px] font-medium hover:bg-gold transition-colors">
+          Üret
+        </button>
+
+        <button id="printBtn" class="px-4 py-1.5 rounded-lg bg-gold text-white text-[13px] font-medium hover:opacity-90 transition-opacity">
+          🖨️ Yazdır / PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="max-w-5xl mx-auto px-6 pb-3 text-[11px] text-muted-soft tracking-wide">
+      Her masa için bir QR kod. Yazdır → kes → laminat → masaya yapıştır. Müşteri okutunca direkt menüye düşer.
+    </div>
+  </header>
+
+  <!-- QR Grid -->
+  <main class="max-w-5xl mx-auto px-6 py-8">
+    <div id="qrGrid" class="qr-grid"></div>
+  </main>
+
+  <footer class="no-print text-center py-8 text-[10px] tracking-[0.25em] uppercase text-muted-soft">
+    Olea · QR Üretici
+  </footer>
+
+  <!-- QR kod kütüphanesi -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+
+  <script>
+    const baseUrlInput = document.getElementById('baseUrl');
+    const tableCountInput = document.getElementById('tableCount');
+    const grid = document.getElementById('qrGrid');
+
+    // Default URL — sayfanın açıldığı origin'in klasörü
+    const defaultBase = (() => {
+      const u = new URL(window.location.href);
+      const path = u.pathname.replace(/\/qr\.html?$/, '/').replace(/\/+$/, '/');
+      return u.origin + (path === '/' ? '/' : path);
+    })();
+    baseUrlInput.value = defaultBase;
+
+    function buildSvgQr(text, size = 200) {
+      // Type 0 = auto, 'M' = error correction medium
+      const qr = qrcode(0, 'M');
+      qr.addData(text);
+      qr.make();
+      const moduleCount = qr.getModuleCount();
+      const cellSize = size / moduleCount;
+      const fg = '#2C2A26';
+
+      let cells = '';
+      for (let r = 0; r < moduleCount; r++) {
+        for (let c = 0; c < moduleCount; c++) {
+          if (qr.isDark(r, c)) {
+            cells += `<rect x="${(c * cellSize).toFixed(2)}" y="${(r * cellSize).toFixed(2)}" width="${cellSize.toFixed(2)}" height="${cellSize.toFixed(2)}" fill="${fg}"/>`;
+          }
+        }
+      }
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" shape-rendering="crispEdges">
+        <rect width="${size}" height="${size}" fill="white"/>
+        ${cells}
+      </svg>`;
+    }
+
+    function generate() {
+      const base = (baseUrlInput.value || defaultBase).replace(/\/+$/, '');
+      const count = Math.max(1, Math.min(100, parseInt(tableCountInput.value, 10) || 15));
+
+      grid.innerHTML = '';
+
+      for (let i = 1; i <= count; i++) {
+        const url = `${base}/?masa=${i}`;
+        const svg = buildSvgQr(url, 200);
+        const card = document.createElement('div');
+        card.className = 'qr-card';
+        card.innerHTML = `
+          <div class="text-[10px] tracking-[0.3em] uppercase text-muted-soft mb-1">Olea</div>
+          <div class="font-display text-3xl italic mb-1">Masa ${i}</div>
+          <div class="qr-img-wrap">${svg}</div>
+          <div class="text-[10px] text-muted-soft mt-2 break-all px-2">${url}</div>
+          <div class="text-[9px] tracking-wider uppercase text-gold mt-2">QR'ı tarat → Menü</div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
+    document.getElementById('regenBtn').addEventListener('click', generate);
+    document.getElementById('printBtn').addEventListener('click', () => window.print());
+    baseUrlInput.addEventListener('change', generate);
+    tableCountInput.addEventListener('change', generate);
+
+    // İlk üretim
+    if (typeof qrcode !== 'undefined') {
+      generate();
+    } else {
+      grid.innerHTML = '<div class="col-span-full text-center text-muted py-12">QR kütüphanesi yüklenemedi. Sayfayı yenile.</div>';
+    }
+  </script>
+</body>
+</html>

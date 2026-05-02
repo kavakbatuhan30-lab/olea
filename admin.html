@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#2C2A26" />
   <title>Olea — Personel Paneli</title>
 
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
@@ -64,6 +67,17 @@
       cancelConfirm: { tr: 'Bu siparişi iptal et?', en: 'Cancel this order?', fr: 'Annuler cette commande ?', nl: 'Deze bestelling annuleren?' },
       cancelTip:     { tr: 'Siparişi iptal et', en: 'Cancel order', fr: 'Annuler la commande', nl: 'Bestelling annuleren' },
       people:        { tr: 'kişi',              en: 'people',       fr: 'personnes',         nl: 'personen' },
+      // Login
+      loginTitle:    { tr: 'Personel Girişi',   en: 'Staff Login',  fr: 'Accès Personnel',   nl: 'Personeel Login' },
+      loginDesc:     { tr: 'Bu panel sadece personel içindir. Devam etmek için şifreyi gir.',
+                       en: 'This panel is for staff only. Enter password to continue.',
+                       fr: 'Ce panneau est réservé au personnel. Entrez le mot de passe pour continuer.',
+                       nl: 'Dit paneel is alleen voor personeel. Voer het wachtwoord in om verder te gaan.' },
+      passwordPh:    { tr: 'Şifre',             en: 'Password',     fr: 'Mot de passe',      nl: 'Wachtwoord' },
+      loginBtn:      { tr: 'Giriş',             en: 'Sign In',      fr: 'Se connecter',      nl: 'Inloggen' },
+      wrongPwd:      { tr: 'Şifre yanlış',      en: 'Wrong password', fr: 'Mot de passe incorrect', nl: 'Verkeerd wachtwoord' },
+      logout:        { tr: 'Çıkış',             en: 'Logout',       fr: 'Déconnexion',       nl: 'Uitloggen' },
+      logoutConfirm: { tr: 'Panelden çıkış yapılsın mı?', en: 'Sign out of admin panel?', fr: 'Se déconnecter du panneau ?', nl: 'Uitloggen uit paneel?' },
       clearConfirm:  { tr: 'Tüm aktif ve geçmiş siparişler silinsin mi? (Demo amaçlı)',
                        en: 'Delete all active and past orders? (Demo only)',
                        fr: 'Supprimer toutes les commandes actives et passées ? (Démo)',
@@ -102,6 +116,17 @@
     };
 
     const fmt = (n) => `€${n.toFixed(2).replace('.', ',')}`;
+
+    // ── Admin sifre ────────────────────────────────────────────
+    // PATRON: Bu sifreyi degistirmek icin alttaki satiri duzenle.
+    // Sifrenin source'da gorunmesi sorun degil — gercek guvenlik
+    // Firestore Security Rules'da. Bu kapi sadece UX engeli.
+    const ADMIN_PASSWORD = 'olea2026';
+    const AUTH_KEY = 'olea:admin-auth';
+    const isLoggedIn = () => localStorage.getItem(AUTH_KEY) === 'ok';
+    const setLoggedIn = (yes) => yes
+      ? localStorage.setItem(AUTH_KEY, 'ok')
+      : localStorage.removeItem(AUTH_KEY);
 
     function timeAgo(ms, lang) {
       const diff = Date.now() - ms;
@@ -177,7 +202,7 @@
     }
 
     // ── HEADER ─────────────────────────────────────────────────
-    function AdminHeader({ count, soundOn, onToggleSound, onClearAll, lang, onLangChange }) {
+    function AdminHeader({ count, soundOn, onToggleSound, onClearAll, onLogout, lang, onLangChange }) {
       return (
         <header className="sticky top-0 z-30 bg-charcoal text-cream">
           <div className="px-6 py-4 flex items-center justify-between max-w-7xl mx-auto gap-3 flex-wrap">
@@ -204,6 +229,13 @@
                 {t(UI.reset, lang)}
               </button>
               <LangSwitcher lang={lang} onChange={onLangChange} />
+              <button
+                onClick={onLogout}
+                title={t(UI.logout, lang)}
+                className="w-9 h-9 rounded-full flex items-center justify-center bg-charcoal-soft text-muted hover:text-cream hover:bg-red-900/30 transition-colors"
+              >
+                ⏻
+              </button>
             </div>
           </div>
         </header>
@@ -367,9 +399,79 @@
       );
     }
 
+    // ── LOGIN GATE ─────────────────────────────────────────────
+    function LoginGate({ lang, onLangChange, onSuccess }) {
+      const [pwd, setPwd] = useState('');
+      const [err, setErr] = useState(false);
+      const [shake, setShake] = useState(false);
+      const inputRef = useRef(null);
+
+      const handleSubmit = (e) => {
+        e?.preventDefault();
+        if (pwd === ADMIN_PASSWORD) {
+          setLoggedIn(true);
+          onSuccess();
+        } else {
+          setErr(true);
+          setShake(true);
+          setTimeout(() => setShake(false), 500);
+          inputRef.current?.select();
+        }
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-charcoal text-cream px-6">
+          <div className="absolute top-4 right-4">
+            <LangSwitcher lang={lang} onChange={onLangChange} />
+          </div>
+
+          <div className="w-full max-w-sm">
+            <div className="text-center mb-8">
+              <div className="font-display text-6xl italic text-cream mb-1">Olea</div>
+              <div className="text-[10px] tracking-[0.35em] uppercase text-gold-soft">{t(UI.panelTitle, lang)}</div>
+            </div>
+
+            <div className="bg-charcoal-soft border border-charcoal-soft rounded-2xl p-6">
+              <h1 className="font-display text-2xl italic text-cream mb-1">{t(UI.loginTitle, lang)}</h1>
+              <p className="text-[12px] text-muted leading-relaxed mb-5">{t(UI.loginDesc, lang)}</p>
+
+              <form onSubmit={handleSubmit}>
+                <input
+                  ref={inputRef}
+                  type="password"
+                  autoFocus
+                  value={pwd}
+                  onChange={(e) => { setPwd(e.target.value); setErr(false); }}
+                  placeholder={t(UI.passwordPh, lang)}
+                  className={`w-full px-4 py-3 rounded-xl bg-charcoal text-cream border-2 text-[15px] tracking-wide focus:outline-none transition-colors ${
+                    err ? 'border-red-500' : 'border-charcoal-soft focus:border-gold'
+                  } ${shake ? 'animate-shake' : ''}`}
+                />
+                {err && (
+                  <div className="text-[12px] text-red-400 mt-2 ml-1">{t(UI.wrongPwd, lang)}</div>
+                )}
+                <button
+                  type="submit"
+                  disabled={!pwd}
+                  className="w-full mt-4 py-3 rounded-xl bg-gold text-charcoal font-medium tracking-wide disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                >
+                  {t(UI.loginBtn, lang)}
+                </button>
+              </form>
+            </div>
+
+            <div className="text-center mt-6">
+              <span className="text-[10px] tracking-[0.25em] uppercase text-muted-soft">Olea · 2026</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // ── ROOT ───────────────────────────────────────────────────
     function App() {
       const [lang, setLang] = useState(detectLang);
+      const [authed, setAuthed] = useState(isLoggedIn);
       const [orders, setOrders] = useState(() => store.getActiveOrders());
       const [archive, setArchive] = useState(() => store.getArchivedOrders());
       const [soundOn, setSoundOn] = useState(true);
@@ -418,8 +520,17 @@
         }
       }, []);
 
+      // Cikis
+      const handleLogout = () => {
+        if (confirm(t(UI.logoutConfirm, lang))) {
+          setLoggedIn(false);
+          setAuthed(false);
+        }
+      };
+
       // Subscribe to store changes
       useEffect(() => {
+        if (!authed) return;
         const unsub = store.subscribe((msg) => {
           if (msg.type === 'order:new') {
             refresh();
@@ -444,7 +555,7 @@
           }
         });
         return unsub;
-      }, [soundOn, refresh, lang]);
+      }, [soundOn, refresh, lang, authed]);
 
       const handleAdvance = (id, status) => {
         store.updateOrderStatus(id, status).catch(err => console.error('[admin] updateStatus failed', err));
@@ -474,6 +585,11 @@
         });
       }, [orders]);
 
+      // Authed degilse login goster
+      if (!authed) {
+        return <LoginGate lang={lang} onLangChange={setLang} onSuccess={() => setAuthed(true)} />;
+      }
+
       return (
         <>
           <AdminHeader
@@ -481,6 +597,7 @@
             soundOn={soundOn}
             onToggleSound={() => setSoundOn(s => !s)}
             onClearAll={handleClear}
+            onLogout={handleLogout}
             lang={lang}
             onLangChange={setLang}
           />
