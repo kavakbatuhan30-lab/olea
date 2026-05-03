@@ -94,6 +94,23 @@
       forPeople:     { tr: 'için',           en: 'for',           fr: 'pour',              nl: 'voor' },
       minPeople:     { tr: 'min.',           en: 'min.',          fr: 'min.',              nl: 'min.' },
       orderNotFound: { tr: 'Sipariş bulunamadı.', en: 'Order not found.', fr: 'Commande introuvable.', nl: 'Bestelling niet gevonden.' },
+      // Notifications
+      notifPromptTitle: { tr: 'Bildirim Aç', en: 'Enable Notifications', fr: 'Activer les notifications', nl: 'Meldingen Inschakelen' },
+      notifPromptDesc:  { tr: 'Sipariş hazır olduğunda telefonuna bildirim gelsin',
+                          en: 'Get a notification on your phone when your order is ready',
+                          fr: 'Recevez une notification sur votre téléphone quand votre commande est prête',
+                          nl: 'Ontvang een melding op je telefoon zodra je bestelling klaar is' },
+      notifEnable:      { tr: 'Aç',           en: 'Enable',          fr: 'Activer',           nl: 'Aanzetten' },
+      notifLater:       { tr: 'Şimdi değil',  en: 'Not now',         fr: 'Plus tard',         nl: 'Later' },
+      notifOn:          { tr: '🔔 Bildirim aktif', en: '🔔 Notifications on', fr: '🔔 Notifications activées', nl: '🔔 Meldingen aan' },
+      notifBlocked:     { tr: 'Bildirimler engellendi — tarayıcı ayarlarından izin ver',
+                          en: 'Notifications blocked — allow them in browser settings',
+                          fr: 'Notifications bloquées — autorisez-les dans les paramètres du navigateur',
+                          nl: 'Meldingen geblokkeerd — sta ze toe in de browserinstellingen' },
+      notifReadyTitle:  { tr: 'Siparişiniz hazır!', en: 'Your order is ready!', fr: 'Votre commande est prête !', nl: 'Je bestelling is klaar!' },
+      notifReadyBody:   { tr: 'Garson masanıza getiriyor', en: 'Server is bringing it', fr: 'Le serveur l\'apporte', nl: 'De ober brengt het' },
+      notifPrepBody:    { tr: 'Şefimiz hazırlıyor', en: 'Chef is preparing it', fr: 'Le chef la prépare', nl: 'De chef bereidt het' },
+      notifServedBody:  { tr: 'Afiyet olsun!', en: 'Enjoy!', fr: 'Bon appétit !', nl: 'Eet smakelijk!' },
       status: {
         new:       { tr: 'Sipariş Alındı', en: 'Order Received', fr: 'Commande Reçue', nl: 'Bestelling Ontvangen' },
         preparing: { tr: 'Hazırlanıyor',   en: 'Preparing',      fr: 'En Préparation', nl: 'In Bereiding' },
@@ -542,6 +559,117 @@
       );
     }
 
+    // ── CHIME (Web Audio) — durum guncellemesinde calar ───────
+    function playChime() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = ctx.currentTime;
+        // 3 notali zarif yukselen ding
+        [
+          { freq: 660, t: 0,    dur: 0.18, vol: 0.18 },
+          { freq: 880, t: 0.10, dur: 0.18, vol: 0.16 },
+          { freq: 1320, t: 0.20, dur: 0.36, vol: 0.14 },
+        ].forEach(({ freq, t: tt, dur, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0, now + tt);
+          gain.gain.linearRampToValueAtTime(vol, now + tt + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + tt + dur);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(now + tt);
+          osc.stop(now + tt + dur + 0.05);
+        });
+        setTimeout(() => ctx.close(), 1000);
+      } catch {}
+    }
+
+    function vibrate(pattern) {
+      try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
+    }
+
+    function showOSNotification(title, body) {
+      try {
+        if (typeof Notification === 'undefined') return;
+        if (Notification.permission !== 'granted') return;
+        new Notification(title, {
+          body,
+          icon: 'icon.svg',
+          badge: 'icon.svg',
+          tag: 'olea-status',
+          renotify: true,
+          vibrate: [200, 100, 200, 100, 400],
+        });
+      } catch {}
+    }
+
+    // ── NOTIFICATION PERMISSION BANNER ────────────────────────
+    function NotifBanner({ lang, onChange }) {
+      const [permState, setPermState] = useState(
+        typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
+      );
+      const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('olea:notif-dismiss') === '1');
+
+      const request = async () => {
+        if (typeof Notification === 'undefined') return;
+        const result = await Notification.requestPermission();
+        setPermState(result);
+        onChange?.(result);
+      };
+
+      const dismiss = () => {
+        sessionStorage.setItem('olea:notif-dismiss', '1');
+        setDismissed(true);
+      };
+
+      if (permState === 'unsupported') return null;
+
+      if (permState === 'granted') {
+        return (
+          <div className="text-[11px] text-olive flex items-center justify-center gap-2 mt-3">
+            {t(UI.notifOn, lang)}
+          </div>
+        );
+      }
+
+      if (permState === 'denied') {
+        return (
+          <div className="text-[11px] text-muted-soft text-center mt-3 max-w-xs mx-auto leading-relaxed">
+            {t(UI.notifBlocked, lang)}
+          </div>
+        );
+      }
+
+      if (dismissed) return null;
+
+      return (
+        <div className="bg-cream-deep border border-border-soft rounded-2xl p-4 mt-4 max-w-md mx-auto text-left">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl flex-shrink-0 mt-0.5">🔔</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium text-charcoal mb-1">{t(UI.notifPromptTitle, lang)}</div>
+              <div className="text-[12px] text-muted leading-snug mb-3">{t(UI.notifPromptDesc, lang)}</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={request}
+                  className="flex-1 py-2 rounded-lg bg-charcoal text-cream text-[12px] font-medium hover:bg-gold transition-colors"
+                >
+                  {t(UI.notifEnable, lang)}
+                </button>
+                <button
+                  onClick={dismiss}
+                  className="px-3 py-2 rounded-lg text-[12px] text-muted hover:text-charcoal"
+                >
+                  {t(UI.notifLater, lang)}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // ── CONFIRMATION ───────────────────────────────────────────
     function StatusFlow({ status, lang }) {
       const stages = ['new', 'preparing', 'ready', 'served'];
@@ -567,6 +695,7 @@
 
     function ConfirmationScreen({ orderId, onNew, lang, onLangChange }) {
       const [order, setOrder] = useState(() => store.getOrderById(orderId));
+      const lastStatusRef = useRef(order?.status);
 
       useEffect(() => {
         const refresh = () => setOrder(store.getOrderById(orderId));
@@ -577,6 +706,31 @@
         });
         return unsub;
       }, [orderId]);
+
+      // Status değişince → chime + vibrate + browser notification
+      useEffect(() => {
+        if (!order) return;
+        const prev = lastStatusRef.current;
+        if (prev && prev !== order.status) {
+          playChime();
+          vibrate([200, 100, 200, 100, 400]);
+          // Browser notification (eğer izin verildiyse)
+          const titleMap = {
+            preparing: t(UI.status.preparing, lang),
+            ready: t(UI.notifReadyTitle, lang),
+            served: t(UI.status.served, lang),
+          };
+          const bodyMap = {
+            preparing: t(UI.notifPrepBody, lang),
+            ready: t(UI.notifReadyBody, lang) + ` · ${t(UI.table, lang)} ${order.table}`,
+            served: t(UI.notifServedBody, lang),
+          };
+          const title = titleMap[order.status];
+          const body = bodyMap[order.status];
+          if (title) showOSNotification(`Olea — ${title}`, body || '');
+        }
+        lastStatusRef.current = order.status;
+      }, [order?.status, lang]);
 
       if (!order) {
         return <div className="min-h-screen flex items-center justify-center text-muted">{t(UI.orderNotFound, lang)}</div>;
@@ -595,11 +749,13 @@
             </div>
             <h1 className="font-display text-4xl italic text-charcoal mb-2">{t(UI.status[order.status], lang)}</h1>
             <p className="text-muted mb-1">{t(UI.statusDesc[order.status], lang)}</p>
-            <p className="text-[13px] text-muted-soft mb-8">{t(UI.table, lang)} {order.table} · {t(UI.approxTime, lang)}</p>
+            <p className="text-[13px] text-muted-soft mb-6">{t(UI.table, lang)} {order.table} · {t(UI.approxTime, lang)}</p>
 
-            <div className="w-full max-w-md mb-10">
+            <div className="w-full max-w-md mb-6">
               <StatusFlow status={order.status} lang={lang} />
             </div>
+
+            {order.status !== 'served' && <NotifBanner lang={lang} />}
 
             <div className="bg-white border border-border-soft rounded-2xl p-5 w-full max-w-md text-left mb-6">
               <div className="text-[11px] tracking-[0.18em] uppercase text-muted-soft mb-3">{t(UI.orderSummary, lang)}</div>
