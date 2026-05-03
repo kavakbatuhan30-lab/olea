@@ -605,17 +605,55 @@
     }
 
     // ── NOTIFICATION PERMISSION BANNER ────────────────────────
-    function NotifBanner({ lang, onChange }) {
-      const [permState, setPermState] = useState(
-        typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
-      );
-      const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('olea:notif-dismiss') === '1');
+    function isIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+    function isStandalone() {
+      return window.matchMedia?.('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true;
+    }
 
-      const request = async () => {
-        if (typeof Notification === 'undefined') return;
-        const result = await Notification.requestPermission();
-        setPermState(result);
-        onChange?.(result);
+    function NotifBanner({ lang, onChange }) {
+      const supported = typeof Notification !== 'undefined' && typeof Notification.requestPermission === 'function';
+      const initialPerm = supported ? Notification.permission : 'unsupported';
+      const [permState, setPermState] = useState(initialPerm);
+      const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('olea:notif-dismiss') === '1');
+      const [errMsg, setErrMsg] = useState(null);
+
+      // iOS Safari + sayfa modu (PWA degil) -> bildirim asla calismaz
+      const iOS = isIOS();
+      const standalone = isStandalone();
+      const iosNeedsPwa = iOS && !standalone;
+
+      const request = () => {
+        setErrMsg(null);
+        console.log('[Olea Notif] request clicked. supported=', supported, 'permission=', supported ? Notification.permission : 'n/a', 'iOS=', iOS, 'standalone=', standalone);
+        if (!supported) {
+          setErrMsg('Bu tarayıcı bildirimleri desteklemiyor.');
+          return;
+        }
+        try {
+          // Hem Promise hem callback API desteklenir; her ikisini de işle
+          const handler = (result) => {
+            console.log('[Olea Notif] permission result =', result);
+            setPermState(result);
+            onChange?.(result);
+            if (result === 'default') {
+              setErrMsg('Tarayıcı izin penceresi açılmadı. Sayfa ayarlarından "Bildirimler"e izin ver.');
+            }
+          };
+          const ret = Notification.requestPermission(handler);
+          if (ret && typeof ret.then === 'function') {
+            ret.then(handler).catch(err => {
+              console.error('[Olea Notif] requestPermission rejected', err);
+              setErrMsg('Hata: ' + (err.message || err));
+            });
+          }
+        } catch (err) {
+          console.error('[Olea Notif] requestPermission threw', err);
+          setErrMsg('Hata: ' + (err.message || err));
+        }
       };
 
       const dismiss = () => {
@@ -623,7 +661,26 @@
         setDismissed(true);
       };
 
-      if (permState === 'unsupported') return null;
+      // iOS sayfa modunda hic asla calismaz, ozel mesaj
+      if (iosNeedsPwa) {
+        if (dismissed) return null;
+        return (
+          <div className="bg-cream-deep border border-border-soft rounded-2xl p-4 mt-4 max-w-md mx-auto text-left">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl flex-shrink-0 mt-0.5">📲</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium text-charcoal mb-1">iPhone bildirimi için</div>
+                <div className="text-[12px] text-muted leading-snug mb-2">
+                  Safari'nin alttaki <strong>Paylaş</strong> ikonuna bas → <strong>"Ana Ekrana Ekle"</strong>. Sonra ana ekrandaki Olea ikonundan açıp izin ver.
+                </div>
+                <button onClick={dismiss} className="text-[12px] text-muted underline">Tamam</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (!supported) return null;
 
       if (permState === 'granted') {
         return (
@@ -664,6 +721,9 @@
                   {t(UI.notifLater, lang)}
                 </button>
               </div>
+              {errMsg && (
+                <div className="text-[11px] text-red-600 mt-2 leading-snug">{errMsg}</div>
+              )}
             </div>
           </div>
         </div>
