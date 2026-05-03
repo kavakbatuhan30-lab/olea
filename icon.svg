@@ -1,18 +1,61 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Olea">
   <defs>
-    <radialGradient id="bg" cx="0.4" cy="0.35" r="0.85">
-      <stop offset="0%" stop-color="#FBF7F0"/>
-      <stop offset="100%" stop-color="#F5EFE3"/>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.85">
+      <stop offset="0%" stop-color="#FDFAF4"/>
+      <stop offset="65%" stop-color="#FBF7F0"/>
+      <stop offset="100%" stop-color="#F0E8D6"/>
+    </radialGradient>
+    <linearGradient id="leafA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7B8E60"/>
+      <stop offset="100%" stop-color="#5A6B45"/>
+    </linearGradient>
+    <linearGradient id="leafB" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8FA071"/>
+      <stop offset="100%" stop-color="#6B7E50"/>
+    </linearGradient>
+    <radialGradient id="berry" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0%" stop-color="#5A4435"/>
+      <stop offset="60%" stop-color="#3D2A1F"/>
+      <stop offset="100%" stop-color="#1F1208"/>
     </radialGradient>
   </defs>
-  <!-- Background -->
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <!-- Circle outline as olive leaf nod -->
-  <circle cx="256" cy="256" r="200" fill="none" stroke="#5A6B45" stroke-width="2" opacity="0.18"/>
-  <!-- Wordmark "O" in italic serif -->
-  <text x="256" y="332" font-family="Cormorant Garamond, Georgia, serif"
-        font-size="320" font-style="italic" font-weight="500"
-        text-anchor="middle" fill="#2C2A26">O</text>
-  <!-- Subtle gold accent dot -->
-  <circle cx="370" cy="180" r="10" fill="#B8956A"/>
+
+  <!-- Rounded square background (works as maskable + any) -->
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+
+  <!-- Subtle inner border (luxury hint) -->
+  <rect x="36" y="36" width="440" height="440" rx="78" fill="none" stroke="#5A6B45" stroke-width="1.25" opacity="0.18"/>
+
+  <!-- Olive sprig (centered, takes ~60% of canvas — safe for maskable) -->
+  <g transform="translate(256 250)">
+
+    <!-- Curving stem -->
+    <path d="M -8 -160 C 12 -100, -12 -30, 0 60"
+          stroke="#5A6B45" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.85"/>
+
+    <!-- Right leaf (top, larger, gradient) -->
+    <g transform="rotate(38 55 -120)">
+      <ellipse cx="55" cy="-120" rx="78" ry="24" fill="url(#leafA)"/>
+      <!-- Center vein -->
+      <line x1="-15" y1="-120" x2="125" y2="-120" stroke="#3D4A2A" stroke-width="1.2" opacity="0.45"/>
+    </g>
+
+    <!-- Left leaf (mid, slightly lighter) -->
+    <g transform="rotate(-32 -55 -75)">
+      <ellipse cx="-55" cy="-75" rx="68" ry="20" fill="url(#leafB)"/>
+      <line x1="-115" y1="-75" x2="0" y2="-75" stroke="#3D4A2A" stroke-width="1" opacity="0.4"/>
+    </g>
+
+    <!-- Bottom right leaf (smaller accent) -->
+    <g transform="rotate(48 50 5)">
+      <ellipse cx="50" cy="5" rx="50" ry="16" fill="url(#leafA)" opacity="0.92"/>
+    </g>
+
+    <!-- The olive berry -->
+    <ellipse cx="-5" cy="115" rx="48" ry="62" fill="url(#berry)"/>
+    <!-- Berry highlight (subtle sheen) -->
+    <ellipse cx="-22" cy="92" rx="10" ry="22" fill="#A89F92" opacity="0.32" transform="rotate(-15 -22 92)"/>
+    <!-- Tiny gold sparkle (Olea brand accent) -->
+    <circle cx="-18" cy="90" r="3.5" fill="#D4B896" opacity="0.85"/>
+  </g>
 </svg>
