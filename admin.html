@@ -103,6 +103,17 @@
       orders:        { tr: 'sipariş',           en: 'orders',        fr: 'commandes',         nl: 'bestellingen' },
       sampleData:    { tr: 'Örnek Veri Üret',   en: 'Generate Sample Data', fr: 'Générer Données Test', nl: 'Genereer Voorbeeld' },
       sampleDone:    { tr: 'Örnek veriler eklendi', en: 'Sample data added', fr: 'Données ajoutées', nl: 'Voorbeeldgegevens toegevoegd' },
+      // Order detail modal
+      orderDetail:   { tr: 'Sipariş Detayı',    en: 'Order Detail',    fr: 'Détail Commande',   nl: 'Bestelling Detail' },
+      printKitchen:  { tr: 'Mutfağa Yazdır',    en: 'Print Kitchen',   fr: 'Imprimer Cuisine',  nl: 'Print Keuken' },
+      printCustomer: { tr: 'Müşteri Fişi',      en: 'Customer Receipt', fr: 'Reçu Client',       nl: 'Klantenbon' },
+      orderTime:     { tr: 'Sipariş Zamanı',    en: 'Order Time',      fr: 'Heure',             nl: 'Tijd' },
+      // Receipt
+      kitchen:       { tr: 'MUTFAK',            en: 'KITCHEN',         fr: 'CUISINE',           nl: 'KEUKEN' },
+      receipt:       { tr: 'FİŞ',               en: 'RECEIPT',         fr: 'REÇU',              nl: 'BON' },
+      thanks:        { tr: 'Teşekkürler!',      en: 'Thank you!',      fr: 'Merci !',           nl: 'Bedankt!' },
+      orderId:       { tr: 'Sipariş No',        en: 'Order ID',        fr: 'N° Commande',       nl: 'Bestelnummer' },
+      receiptFooter: { tr: 'Tekrar bekleriz',   en: 'See you soon',    fr: 'À bientôt',         nl: 'Tot snel' },
       clearConfirm:  { tr: 'Tüm aktif ve geçmiş siparişler silinsin mi? (Demo amaçlı)',
                        en: 'Delete all active and past orders? (Demo only)',
                        fr: 'Supprimer toutes les commandes actives et passées ? (Démo)',
@@ -276,7 +287,7 @@
       ready:      { dotClass: 'status-dot--ready',     bg: 'bg-olive/15',     text: 'text-olive' },
     };
 
-    function OrderCard({ order, isNew, onAdvance, onCancel, lang }) {
+    function OrderCard({ order, isNew, onAdvance, onCancel, onClick, lang }) {
       const [now, setNow] = useState(Date.now());
       useEffect(() => {
         const tm = setInterval(() => setNow(Date.now()), 30000);
@@ -289,8 +300,17 @@
       const dot = STATUS_DOT[order.status];
       const statusLabel = t(UI.status[order.status], lang);
 
+      // Tikla detay aç (button'lar üzerinde tıklamayı engelle)
+      const handleCardClick = (e) => {
+        if (e.target.closest('button')) return;
+        onClick?.(order);
+      };
+
       return (
-        <article className={`bg-white border rounded-2xl overflow-hidden flex flex-col ${isNew ? 'order-flash order-card-new' : ''}`} style={{ borderColor: '#E8E0D0' }}>
+        <article
+          onClick={handleCardClick}
+          className={`bg-white border rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:border-gold/40 transition-colors ${isNew ? 'order-flash order-card-new' : ''}`}
+          style={{ borderColor: '#E8E0D0' }}>
           {/* Top: table + time + status */}
           <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-border-soft">
             <div>
@@ -714,6 +734,182 @@
       );
     }
 
+    // ── ORDER DETAIL MODAL ─────────────────────────────────────
+    function OrderDetailModal({ order, onClose, onAdvance, onCancel, onPrint, lang }) {
+      if (!order) return null;
+      const next = NEXT_STATUS[order.status];
+      const nextLabel = next ? t(UI.nextLabel[order.status], lang) : null;
+      const nextColor = NEXT_BTN_COLOR[order.status];
+      const dot = STATUS_DOT[order.status];
+      const statusLabel = t(UI.status[order.status], lang);
+
+      return (
+        <div className="fixed inset-0 z-50 flex flex-col bg-charcoal/50 modal-backdrop p-4 md:p-8 no-print"
+             onClick={(e) => e.target === e.currentTarget && onClose()}>
+          <div className="modal-content bg-white w-full max-w-2xl mx-auto my-auto rounded-3xl flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Header */}
+            <div className="px-6 pt-5 pb-4 border-b border-border-soft flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="font-display text-3xl italic text-charcoal">{t(UI.table, lang)} {order.table}</span>
+                  {dot && (
+                    <span className={`text-[11px] tracking-wide uppercase px-2.5 py-1 rounded-full ${dot.bg} ${dot.text} font-semibold`}>
+                      <span className={`status-dot ${dot.dotClass}`}></span>
+                      {statusLabel}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[12px] text-muted mt-1.5">
+                  {t(UI.orderTime, lang)}: {timeStr(order.createdAt)} ({timeAgo(order.createdAt, lang)})
+                </div>
+                <div className="text-[10px] text-muted-soft mt-0.5 font-mono">
+                  {t(UI.orderId, lang)}: {order.id.slice(0, 8)}
+                </div>
+              </div>
+              <button onClick={onClose} className="w-9 h-9 rounded-full bg-cream-deep flex items-center justify-center text-charcoal hover:bg-border-soft text-lg" aria-label={t(UI.close || { tr: 'Kapat', en: 'Close', fr: 'Fermer', nl: 'Sluiten' }, lang)}>✕</button>
+            </div>
+
+            {/* Items */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <ul className="divide-y divide-border-soft">
+                {order.items.map(it => (
+                  <li key={it.id} className="py-3 flex justify-between items-baseline gap-3">
+                    <span className="text-[15px] flex-1 min-w-0">
+                      {it.isServes ? (
+                        <span><span className="font-display text-2xl text-gold mr-2">{it.qty}</span><span className="text-[10px] uppercase tracking-wide text-gold mr-2">{t(UI.people, lang)}</span><span className="text-charcoal">{it.name}</span></span>
+                      ) : (
+                        <span><span className="font-display text-2xl text-gold mr-2">{it.qty}×</span><span className="text-charcoal">{it.name}</span></span>
+                      )}
+                    </span>
+                    <span className="text-muted text-[13px] flex-shrink-0">{fmt(it.price * it.qty)}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {order.notes && (
+                <div className="mt-4 p-4 bg-cream-deep border-l-4 border-gold rounded text-[14px] italic text-charcoal-soft">
+                  <span className="text-[10px] tracking-[0.2em] uppercase text-gold not-italic font-semibold mr-2 block mb-1">{t(UI.note, lang)}</span>
+                  {order.notes}
+                </div>
+              )}
+
+              <div className="mt-5 pt-4 border-t border-border-soft flex justify-between items-baseline">
+                <span className="text-[13px] tracking-wide uppercase text-muted">Total</span>
+                <span className="font-display text-4xl text-gold">{fmt(order.total)}</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 py-4 border-t border-border-soft bg-cream-deep/40 flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => onPrint('kitchen')}
+                  className="py-3 rounded-xl bg-charcoal text-cream font-medium text-[13px] tracking-wide hover:bg-gold transition-colors"
+                >
+                  🖨️ {t(UI.printKitchen, lang)}
+                </button>
+                <button
+                  onClick={() => onPrint('customer')}
+                  className="py-3 rounded-xl bg-white border border-charcoal text-charcoal font-medium text-[13px] tracking-wide hover:bg-cream transition-colors"
+                >
+                  🧾 {t(UI.printCustomer, lang)}
+                </button>
+              </div>
+              {nextLabel && (
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <button
+                    onClick={() => onAdvance(order.id, next)}
+                    className={`py-3 rounded-xl font-medium text-[13px] tracking-wide transition-colors ${
+                      nextColor === 'warning' ? 'bg-warning text-white hover:opacity-90' :
+                      nextColor === 'olive'   ? 'bg-olive text-white hover:opacity-90' :
+                      'bg-gold text-charcoal hover:opacity-90'
+                    }`}
+                  >
+                    {nextLabel} →
+                  </button>
+                  <button
+                    onClick={() => { if (confirm(t(UI.cancelConfirm, lang))) { onCancel(order.id); onClose(); } }}
+                    className="px-4 py-3 text-[12px] text-muted hover:text-charcoal border border-border-soft rounded-xl"
+                  >
+                    {t(UI.cancelTip, lang)}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── PRINT RECEIPT ──────────────────────────────────────────
+    function PrintReceipt({ order, mode, lang }) {
+      if (!order || !mode) return null;
+      const isKitchen = mode === 'kitchen';
+      const date = new Date(order.createdAt);
+      const dateStr = date.toLocaleDateString('tr-TR') + ' ' + timeStr(order.createdAt);
+
+      return (
+        <div className="print-only print-receipt">
+          <div className={`receipt ${isKitchen ? 'receipt-kitchen' : 'receipt-customer'}`}>
+            <div className="receipt-header">
+              <div className="receipt-brand">OLEA</div>
+              {isKitchen ? (
+                <div className="receipt-tag">{t(UI.kitchen, lang)}</div>
+              ) : (
+                <div className="receipt-sub">Brunch &amp; Coffee</div>
+              )}
+            </div>
+
+            <div className="receipt-divider"></div>
+
+            <div className="receipt-meta">
+              <div className="receipt-table">{t(UI.table, lang)} {order.table}</div>
+              <div className="receipt-time">{dateStr}</div>
+              <div className="receipt-id">#{order.id.slice(0, 8)}</div>
+            </div>
+
+            <div className="receipt-divider"></div>
+
+            <ul className="receipt-items">
+              {order.items.map(it => (
+                <li key={it.id} className="receipt-item">
+                  <span className="receipt-item-qty">{it.isServes ? `${it.qty} ${t(UI.people, lang)}` : `${it.qty}×`}</span>
+                  <span className="receipt-item-name">{it.name}</span>
+                  {!isKitchen && <span className="receipt-item-price">{fmt(it.price * it.qty)}</span>}
+                </li>
+              ))}
+            </ul>
+
+            {order.notes && (
+              <>
+                <div className="receipt-divider"></div>
+                <div className="receipt-notes">
+                  <div className="receipt-notes-label">{t(UI.note, lang).toUpperCase()}:</div>
+                  <div className="receipt-notes-text">{order.notes}</div>
+                </div>
+              </>
+            )}
+
+            {!isKitchen && (
+              <>
+                <div className="receipt-divider"></div>
+                <div className="receipt-total">
+                  <span>TOPLAM</span>
+                  <span>{fmt(order.total)}</span>
+                </div>
+              </>
+            )}
+
+            <div className="receipt-divider"></div>
+
+            <div className="receipt-footer">
+              {isKitchen ? `${t(UI.orderTime, lang)}: ${timeStr(order.createdAt)}` : t(UI.thanks, lang)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // ── LOGIN GATE ─────────────────────────────────────────────
     function LoginGate({ lang, onLangChange, onSuccess }) {
       const [pwd, setPwd] = useState('');
@@ -788,10 +984,34 @@
       const [lang, setLang] = useState(detectLang);
       const [authed, setAuthed] = useState(isLoggedIn);
       const [tab, setTab] = useState(() => localStorage.getItem('olea:admin-tab') || 'orders');
+      const [detailOrder, setDetailOrder] = useState(null);
+      const [printOrder, setPrintOrder] = useState(null);
+      const [printMode, setPrintMode] = useState(null); // 'kitchen' | 'customer' | null
 
       useEffect(() => {
         localStorage.setItem('olea:admin-tab', tab);
       }, [tab]);
+
+      // Yazdırma — print state set edilince window.print() tetikle
+      useEffect(() => {
+        if (!printOrder || !printMode) return;
+        // Bir frame bekle ki React DOM'a yansıtsın
+        const t = setTimeout(() => {
+          window.print();
+        }, 50);
+        const reset = () => { setPrintOrder(null); setPrintMode(null); };
+        window.addEventListener('afterprint', reset, { once: true });
+        return () => {
+          clearTimeout(t);
+          window.removeEventListener('afterprint', reset);
+        };
+      }, [printOrder, printMode]);
+
+      const handlePrint = (mode) => {
+        if (!detailOrder) return;
+        setPrintMode(mode);
+        setPrintOrder(detailOrder);
+      };
       const [orders, setOrders] = useState(() => store.getActiveOrders());
       const [archive, setArchive] = useState(() => store.getArchivedOrders());
       const [soundOn, setSoundOn] = useState(true);
@@ -941,6 +1161,7 @@
                         isNew={newOrderIds.has(o.id)}
                         onAdvance={handleAdvance}
                         onCancel={handleCancel}
+                        onClick={setDetailOrder}
                         lang={lang}
                       />
                     ))}
@@ -954,9 +1175,24 @@
             <StatsView allOrders={allOrders} lang={lang} />
           )}
 
-          <footer className="text-center py-8 text-[10px] tracking-[0.25em] uppercase text-muted-soft">
+          <footer className="text-center py-8 text-[10px] tracking-[0.25em] uppercase text-muted-soft no-print">
             Olea · {t(UI.panelTitle, lang)} · {sorted.length === 0 ? t(UI.footerSilent, lang) : `${sorted.length} ${t(UI.footerActive, lang)}`}
           </footer>
+
+          {/* Detay modal */}
+          {detailOrder && (
+            <OrderDetailModal
+              order={allOrders.find(o => o.id === detailOrder.id) || detailOrder}
+              onClose={() => setDetailOrder(null)}
+              onAdvance={handleAdvance}
+              onCancel={handleCancel}
+              onPrint={handlePrint}
+              lang={lang}
+            />
+          )}
+
+          {/* Print receipt — sadece yazdırma sırasında görünür */}
+          <PrintReceipt order={printOrder} mode={printMode} lang={lang} />
         </>
       );
     }
