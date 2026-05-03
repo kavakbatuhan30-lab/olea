@@ -50,8 +50,12 @@
   <script type="text/babel" data-type="module" data-presets="react">
     import React, { useState, useEffect, useMemo, useRef, useCallback } from 'https://esm.sh/react@18.3.1';
     import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
-    import { LANGS, t } from './menu.js';
+    import { LANGS, t, MENU, CATEGORIES } from './menu.js';
     import * as store from './store.js?v=2';
+
+    // ── Menü id → kategori ve ürün isim look-up ───────────────
+    const MENU_BY_ID = Object.fromEntries(MENU.map(m => [m.id, m]));
+    const CAT_BY_ID = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
 
     // ── i18n ───────────────────────────────────────────────────
     const UI = {
@@ -78,6 +82,27 @@
       wrongPwd:      { tr: 'Şifre yanlış',      en: 'Wrong password', fr: 'Mot de passe incorrect', nl: 'Verkeerd wachtwoord' },
       logout:        { tr: 'Çıkış',             en: 'Logout',       fr: 'Déconnexion',       nl: 'Uitloggen' },
       logoutConfirm: { tr: 'Panelden çıkış yapılsın mı?', en: 'Sign out of admin panel?', fr: 'Se déconnecter du panneau ?', nl: 'Uitloggen uit paneel?' },
+      // Tabs
+      tabOrders:     { tr: 'Aktif Siparişler',  en: 'Active Orders', fr: 'Commandes Actives', nl: 'Actieve Bestellingen' },
+      tabStats:      { tr: 'İstatistik',        en: 'Statistics',    fr: 'Statistiques',      nl: 'Statistieken' },
+      // Time periods
+      periodToday:   { tr: 'Bugün',             en: 'Today',         fr: 'Aujourd\'hui',      nl: 'Vandaag' },
+      periodWeek:    { tr: 'Bu Hafta',          en: 'This Week',     fr: 'Cette Semaine',     nl: 'Deze Week' },
+      periodMonth:   { tr: 'Bu Ay',             en: 'This Month',    fr: 'Ce Mois',           nl: 'Deze Maand' },
+      periodAll:     { tr: 'Tümü',              en: 'All Time',      fr: 'Tout',              nl: 'Alles' },
+      // Stat metrics
+      revenue:       { tr: 'Toplam Ciro',       en: 'Total Revenue', fr: 'Chiffre d\'Affaires', nl: 'Totale Omzet' },
+      orderCount:    { tr: 'Sipariş Sayısı',    en: 'Order Count',   fr: 'Nb. de Commandes',  nl: 'Aantal Bestellingen' },
+      avgBasket:     { tr: 'Ortalama Sepet',    en: 'Avg. Basket',   fr: 'Panier Moyen',      nl: 'Gem. Mandje' },
+      // Charts
+      topItems:      { tr: 'En Çok Satan Ürünler', en: 'Top Selling Items', fr: 'Articles les Plus Vendus', nl: 'Best Verkopende Items' },
+      hourlyDist:    { tr: 'Saatlik Dağılım',   en: 'Hourly Distribution', fr: 'Distribution Horaire', nl: 'Uurlijkse Verdeling' },
+      catBreakdown:  { tr: 'Kategori Dağılımı', en: 'Category Breakdown', fr: 'Par Catégorie', nl: 'Per Categorie' },
+      noData:        { tr: 'Bu dönemde veri yok', en: 'No data for this period', fr: 'Aucune donnée pour cette période', nl: 'Geen gegevens voor deze periode' },
+      sold:          { tr: 'satıldı',           en: 'sold',          fr: 'vendus',            nl: 'verkocht' },
+      orders:        { tr: 'sipariş',           en: 'orders',        fr: 'commandes',         nl: 'bestellingen' },
+      sampleData:    { tr: 'Örnek Veri Üret',   en: 'Generate Sample Data', fr: 'Générer Données Test', nl: 'Genereer Voorbeeld' },
+      sampleDone:    { tr: 'Örnek veriler eklendi', en: 'Sample data added', fr: 'Données ajoutées', nl: 'Voorbeeldgegevens toegevoegd' },
       clearConfirm:  { tr: 'Tüm aktif ve geçmiş siparişler silinsin mi? (Demo amaçlı)',
                        en: 'Delete all active and past orders? (Demo only)',
                        fr: 'Supprimer toutes les commandes actives et passées ? (Démo)',
@@ -399,6 +424,296 @@
       );
     }
 
+    // ── STATS: zaman dilimi başlangıcı ─────────────────────────
+    function startOfPeriod(period) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      if (period === 'today') return d.getTime();
+      if (period === 'week') {
+        // Pazartesi başı (FR/NL/TR konvansiyonu)
+        const dow = (d.getDay() + 6) % 7; // 0 = Mon
+        d.setDate(d.getDate() - dow);
+        return d.getTime();
+      }
+      if (period === 'month') {
+        d.setDate(1);
+        return d.getTime();
+      }
+      return 0; // all time
+    }
+
+    // ── STATS: tüm sipariş veri toplama (active + archive) ─────
+    function aggregate(orders, lang) {
+      const totalRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
+      const orderCount = orders.length;
+      const avgBasket = orderCount > 0 ? totalRevenue / orderCount : 0;
+
+      // Item counts (qty toplamı)
+      const itemMap = new Map();
+      const catMap = new Map();
+      const hourly = new Array(24).fill(0);
+
+      orders.forEach(o => {
+        const hour = new Date(o.createdAt).getHours();
+        hourly[hour] += o.total || 0;
+
+        (o.items || []).forEach(it => {
+          const key = it.id;
+          const prev = itemMap.get(key) || { id: key, name: it.name, qty: 0, revenue: 0 };
+          prev.qty += it.qty || 0;
+          prev.revenue += (it.price || 0) * (it.qty || 0);
+          itemMap.set(key, prev);
+
+          // Kategori — menu lookup'tan
+          const menuItem = MENU_BY_ID[it.id];
+          if (menuItem) {
+            const catId = menuItem.cat;
+            const c = catMap.get(catId) || { id: catId, qty: 0, revenue: 0 };
+            c.qty += it.qty || 0;
+            c.revenue += (it.price || 0) * (it.qty || 0);
+            catMap.set(catId, c);
+          }
+        });
+      });
+
+      const topItems = [...itemMap.values()]
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 10);
+
+      const categories = [...catMap.values()]
+        .map(c => ({ ...c, name: t(CAT_BY_ID[c.id]?.name, lang) || c.id, emoji: CAT_BY_ID[c.id]?.emoji || '🍽️' }))
+        .sort((a, b) => b.revenue - a.revenue);
+
+      return { totalRevenue, orderCount, avgBasket, topItems, categories, hourly };
+    }
+
+    // ── METRIC CARD ────────────────────────────────────────────
+    function MetricCard({ label, value, sublabel, accent = false }) {
+      return (
+        <div className={`bg-white border rounded-2xl p-5 ${accent ? 'border-gold/40' : 'border-border-soft'}`}>
+          <div className="text-[10px] tracking-[0.2em] uppercase text-muted-soft mb-2">{label}</div>
+          <div className={`font-display text-4xl ${accent ? 'text-gold' : 'text-charcoal'} leading-none`}>{value}</div>
+          {sublabel && <div className="text-[11px] text-muted mt-2">{sublabel}</div>}
+        </div>
+      );
+    }
+
+    // ── TOP ITEMS CHART (horizontal bars) ──────────────────────
+    function TopItemsChart({ items, lang }) {
+      if (items.length === 0) return null;
+      const max = items[0]?.qty || 1;
+      const fmt = (n) => `€${n.toFixed(2).replace('.', ',')}`;
+
+      return (
+        <div className="bg-white border border-border-soft rounded-2xl p-5">
+          <div className="text-[12px] tracking-wide uppercase text-muted-soft mb-4 font-medium">{t(UI.topItems, lang)}</div>
+          <ul className="space-y-2.5">
+            {items.map((it, i) => {
+              const pct = (it.qty / max) * 100;
+              return (
+                <li key={it.id} className="flex items-center gap-3 text-[13px]">
+                  <span className="w-5 text-muted-soft text-[11px] font-medium text-right">{i + 1}</span>
+                  <span className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <span className="text-charcoal truncate">{it.name}</span>
+                      <span className="text-muted text-[11px] flex-shrink-0">
+                        <span className="text-gold font-semibold">{it.qty}</span> · {fmt(it.revenue)}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-cream-deep rounded-full overflow-hidden">
+                      <div className="h-full bg-gold rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+                    </div>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
+    }
+
+    // ── HOURLY CHART (24 col bar) ──────────────────────────────
+    function HourlyChart({ hourly, lang }) {
+      const max = Math.max(...hourly, 1);
+      const fmt = (n) => `€${n.toFixed(0)}`;
+      const peakHour = hourly.indexOf(Math.max(...hourly));
+
+      return (
+        <div className="bg-white border border-border-soft rounded-2xl p-5">
+          <div className="flex items-baseline justify-between mb-4">
+            <div className="text-[12px] tracking-wide uppercase text-muted-soft font-medium">{t(UI.hourlyDist, lang)}</div>
+            {hourly.some(h => h > 0) && (
+              <div className="text-[11px] text-muted">
+                Peak: <span className="font-display text-gold text-base">{peakHour}:00</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-end gap-[2px] h-32">
+            {hourly.map((value, h) => {
+              const pct = (value / max) * 100;
+              const isPeak = value === max && value > 0;
+              return (
+                <div key={h} className="flex-1 group relative flex flex-col justify-end items-center">
+                  <div
+                    className={`w-full rounded-t transition-all ${isPeak ? 'bg-gold' : 'bg-charcoal/15 group-hover:bg-charcoal/30'}`}
+                    style={{ height: `${pct}%`, minHeight: value > 0 ? '2px' : '0' }}
+                    title={`${h}:00 — ${fmt(value)}`}
+                  ></div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-between mt-2 text-[9px] text-muted-soft tracking-wide">
+            <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+          </div>
+        </div>
+      );
+    }
+
+    // ── CATEGORY CHART ─────────────────────────────────────────
+    function CategoryChart({ categories, lang }) {
+      if (categories.length === 0) return null;
+      const max = categories[0]?.revenue || 1;
+      const fmt = (n) => `€${n.toFixed(2).replace('.', ',')}`;
+
+      return (
+        <div className="bg-white border border-border-soft rounded-2xl p-5">
+          <div className="text-[12px] tracking-wide uppercase text-muted-soft mb-4 font-medium">{t(UI.catBreakdown, lang)}</div>
+          <ul className="space-y-2.5">
+            {categories.map(c => {
+              const pct = (c.revenue / max) * 100;
+              return (
+                <li key={c.id} className="flex items-center gap-3 text-[13px]">
+                  <span className="text-base flex-shrink-0">{c.emoji}</span>
+                  <span className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <span className="text-charcoal truncate">{c.name}</span>
+                      <span className="text-muted text-[11px] flex-shrink-0">
+                        <span className="text-charcoal font-medium">{c.qty}×</span> · <span className="text-gold font-semibold">{fmt(c.revenue)}</span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-cream-deep rounded-full overflow-hidden">
+                      <div className="h-full bg-olive rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+                    </div>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
+    }
+
+    // ── PERIOD TABS ────────────────────────────────────────────
+    function PeriodTabs({ value, onChange, lang }) {
+      const periods = [
+        { id: 'today', label: t(UI.periodToday, lang) },
+        { id: 'week', label: t(UI.periodWeek, lang) },
+        { id: 'month', label: t(UI.periodMonth, lang) },
+        { id: 'all', label: t(UI.periodAll, lang) },
+      ];
+      return (
+        <div className="flex gap-1 bg-cream-deep border border-border-soft rounded-full p-1 inline-flex">
+          {periods.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onChange(p.id)}
+              className={`px-4 py-1.5 rounded-full text-[12px] font-medium tracking-wide transition-colors ${
+                value === p.id ? 'bg-charcoal text-cream' : 'text-muted hover:text-charcoal'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    // ── STATS VIEW (ana sayfa) ─────────────────────────────────
+    function StatsView({ allOrders, lang }) {
+      const [period, setPeriod] = useState(() => localStorage.getItem('olea:stat-period') || 'today');
+
+      useEffect(() => {
+        localStorage.setItem('olea:stat-period', period);
+      }, [period]);
+
+      const filtered = useMemo(() => {
+        const start = startOfPeriod(period);
+        return allOrders.filter(o => (o.createdAt || 0) >= start);
+      }, [allOrders, period]);
+
+      const stats = useMemo(() => aggregate(filtered, lang), [filtered, lang]);
+      const fmt = (n) => `€${n.toFixed(2).replace('.', ',')}`;
+
+      return (
+        <main className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+            <h2 className="font-display text-3xl italic text-charcoal">{t(UI.tabStats, lang)}</h2>
+            <PeriodTabs value={period} onChange={setPeriod} lang={lang} />
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="text-center py-20 text-muted">
+              <div className="font-display text-5xl italic text-gold-soft/30 mb-2">∅</div>
+              <p>{t(UI.noData, lang)}</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+                <MetricCard
+                  label={t(UI.revenue, lang)}
+                  value={fmt(stats.totalRevenue)}
+                  sublabel={`${stats.orderCount} ${t(UI.orders, lang)}`}
+                  accent
+                />
+                <MetricCard
+                  label={t(UI.orderCount, lang)}
+                  value={stats.orderCount}
+                />
+                <MetricCard
+                  label={t(UI.avgBasket, lang)}
+                  value={fmt(stats.avgBasket)}
+                />
+              </div>
+
+              <div className="grid gap-4 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }}>
+                <TopItemsChart items={stats.topItems} lang={lang} />
+                <CategoryChart categories={stats.categories} lang={lang} />
+              </div>
+
+              <HourlyChart hourly={stats.hourly} lang={lang} />
+            </>
+          )}
+        </main>
+      );
+    }
+
+    // ── TAB BAR (Aktif | İstatistik) ───────────────────────────
+    function TabBar({ tab, onChange, lang }) {
+      return (
+        <div className="bg-cream border-b border-border-soft sticky top-[60px] z-20">
+          <div className="max-w-7xl mx-auto px-6 flex gap-1">
+            {[
+              { id: 'orders', label: t(UI.tabOrders, lang) },
+              { id: 'stats', label: t(UI.tabStats, lang) },
+            ].map(tt => (
+              <button
+                key={tt.id}
+                onClick={() => onChange(tt.id)}
+                className={`px-4 py-3 text-[12px] tracking-wide font-medium transition-colors border-b-2 -mb-px ${
+                  tab === tt.id
+                    ? 'text-charcoal border-charcoal'
+                    : 'text-muted hover:text-charcoal border-transparent'
+                }`}
+              >
+                {tt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     // ── LOGIN GATE ─────────────────────────────────────────────
     function LoginGate({ lang, onLangChange, onSuccess }) {
       const [pwd, setPwd] = useState('');
@@ -472,6 +787,11 @@
     function App() {
       const [lang, setLang] = useState(detectLang);
       const [authed, setAuthed] = useState(isLoggedIn);
+      const [tab, setTab] = useState(() => localStorage.getItem('olea:admin-tab') || 'orders');
+
+      useEffect(() => {
+        localStorage.setItem('olea:admin-tab', tab);
+      }, [tab]);
       const [orders, setOrders] = useState(() => store.getActiveOrders());
       const [archive, setArchive] = useState(() => store.getArchivedOrders());
       const [soundOn, setSoundOn] = useState(true);
@@ -590,6 +910,9 @@
         return <LoginGate lang={lang} onLangChange={setLang} onSuccess={() => setAuthed(true)} />;
       }
 
+      // Stats view icin tum siparisleri birlestir
+      const allOrders = useMemo(() => [...orders, ...archive], [orders, archive]);
+
       return (
         <>
           <AdminHeader
@@ -602,26 +925,34 @@
             onLangChange={setLang}
           />
 
-          <main className="max-w-7xl mx-auto px-6 py-6">
-            {sorted.length === 0 ? (
-              <EmptyState lang={lang} />
-            ) : (
-              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                {sorted.map(o => (
-                  <OrderCard
-                    key={o.id}
-                    order={o}
-                    isNew={newOrderIds.has(o.id)}
-                    onAdvance={handleAdvance}
-                    onCancel={handleCancel}
-                    lang={lang}
-                  />
-                ))}
-              </div>
-            )}
-          </main>
+          <TabBar tab={tab} onChange={setTab} lang={lang} />
 
-          <Archive orders={archive} lang={lang} />
+          {tab === 'orders' ? (
+            <>
+              <main className="max-w-7xl mx-auto px-6 py-6">
+                {sorted.length === 0 ? (
+                  <EmptyState lang={lang} />
+                ) : (
+                  <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                    {sorted.map(o => (
+                      <OrderCard
+                        key={o.id}
+                        order={o}
+                        isNew={newOrderIds.has(o.id)}
+                        onAdvance={handleAdvance}
+                        onCancel={handleCancel}
+                        lang={lang}
+                      />
+                    ))}
+                  </div>
+                )}
+              </main>
+
+              <Archive orders={archive} lang={lang} />
+            </>
+          ) : (
+            <StatsView allOrders={allOrders} lang={lang} />
+          )}
 
           <footer className="text-center py-8 text-[10px] tracking-[0.25em] uppercase text-muted-soft">
             Olea · {t(UI.panelTitle, lang)} · {sorted.length === 0 ? t(UI.footerSilent, lang) : `${sorted.length} ${t(UI.footerActive, lang)}`}
